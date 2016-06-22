@@ -123,3 +123,73 @@ else:
     def getFilesystemPath(self, metric):
       metric_path = metric.replace('.', sep).lstrip(sep) + '.wsp'
       return join(self.data_dir, metric_path)
+
+
+try:
+  from carbon.hbase import HBaseDB, load_schemas
+  from random import randrange
+except ImportError:
+  pass
+else:
+  class HBaseDatabase(TimeSeriesDatabase):
+    plugin_name = 'hbase'
+
+    def __init__(self, settings):
+      thrift_host = settings.get('HBASE_THRIFT_HOST', 'localhost')
+      thrift_port = settings.get('HBASE_THRIFT_PORT', 9090)
+      transport_type = settings.get('HBASE_TRANSPORT_TYPE', 'buffered')
+      batch_size = settings.get('HBASE_BATCH_SIZE', 100)
+      """
+      We add a few random minutes so thrift servers don't get slammed
+      with re-connection attempts
+      """
+      reset_interval = settings.get('HBASE_RESET_INTERVAL', 3600) + randrange(120)
+      connection_retries = settings.get('HBASE_CONNECTION_RETRIES', 3)
+      protocol = settings.get('HBASE_PROTOCOL', 'binary')
+      table_prefix = settings.get('HBASE_TABLE_PREFIX', 'graphite')
+      compat_level = settings.get('HBASE_COMPAT_LEVEL', '0.94')
+
+      path = join(settings["CONF_DIR"], "storage-schemas.conf")
+      whitelist = join(settings["CONF_DIR"], "whitelist.conf")
+      metric_schema, self.storage_schemas = load_schemas(path, whitelist)
+
+      """
+        We'll send batches aggressively
+      We batch to reduce writes, but we still want "real time" data.
+      (Relative, obvs...)
+      This means we have to write fairly frequently (send_freq) so
+      more fine-grained data (<1 minute, etc) still shows rapidly.
+      The trade-off is that we're doing more smaller writes this way.
+      """
+      send_freq = 60
+      for s in self.storage_schemas:
+        cur_min = min([t.getTuple()[0] for t in s.archives])
+        if cur_min < send_freq:
+          send_freq = cur_min
+
+      settingsdict = {'host': thrift_host, 'port': thrift_port,
+                      'ttype': transport_type, 'batch': batch_size,
+                      'reset_int': reset_interval, 'retries': connection_retries,
+                      'protocol': protocol, 'prefix': table_prefix,
+                      'compat': compat_level, 'send_freq': send_freq,
+                      'm_schema': metric_schema}
+      self.h_db = HBaseDB(settingsdict)
+
+    def create(self, metric, retentions, xfilesfactor, aggregation_method):
+      self.h_db.create(metric, retentions, aggregation_method)
+
+    def getMetaData(self, metric, key):
+      return self.get_row(metric)['AGG_METHOD']
+
+    def write(self, metric, points):
+      reten_config = []
+      for schema in self.storage_schemas:
+        if schema.matches(metric):
+          reten_config = [archive.getTuple() for archive in schema.archives]
+          break
+      if not reten_config:
+        raise Exception("Couldn't find a retention config for %s" % metric)
+      self.h_db.update_many(metric, points, reten_config)
+
+    def exists(self, metric):
+      return self.h_db.exists(metric)

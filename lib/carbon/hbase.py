@@ -57,7 +57,7 @@ class HBaseDB(object):
   __slots__ = ('thrift_host', 'thrift_port', 'transport_type', 'batch_size',
                'reset_interval', 'connection_retries', 'protocol', 'table_prefix',
                'compat_level', 'send_freq', 'schema', 'data_tables', 'data_batches',
-               'send_time', 'reset_time', 'reset_interval', 'client', 'meta_table', )
+               'send_time', 'reset_time', 'reset_interval', 'client', 'meta_table')
   def __init__(self, settingsdict):
     self.thrift_host = settingsdict['host']
     self.thrift_port = settingsdict['port']
@@ -78,7 +78,6 @@ class HBaseDB(object):
     self.reset_time = 0
     self.client = None
     self.meta_table = None
-    self.reset_interval = 0
 
     # use the reset function only for consistent connection creation
     self.__reset_conn()
@@ -306,40 +305,25 @@ class Schema(object):
 
 
 class DefaultSchema(Schema):
-  __slots__ = ('name', 'archives', )
+  __slots__ = ('name', 'archives')
   def __init__(self, name, archives):
     self.name = name
     self.archives = archives
 
 class PatternSchema(Schema):
-  __slots__ = ('name', 'pattern', 'regex', 'archives', )
+  __slots__ = ('name', 'pattern', 'regex', 'archives')
   def __init__(self, name, pattern, archives):
     self.name = name
     self.pattern = pattern
     self.regex = re.compile(pattern)
     self.archives = archives
 
-
-class ListSchema(Schema):
-  __slots__ = ('name', 'listName', 'archives', 'path',
-               'mtime', 'members', )
-  def __init__(self, name, listName, archives):
-    self.name = name
-    self.listName = listName
-    self.archives = archives
-    self.path = join(settings.WHITELISTS_DIR, listName)
-    if exists(self.path):
-      self.mtime = os.stat(self.path).st_mtime
-      with open(self.path, 'rb') as fh:
-        self.members = pickle.load(fh)
-    else:
-      self.mtime = 0
-      self.members = frozenset()
-    return metric in self.members
+  def test(self, metric):
+    return self.regex.search(metric)
 
 
 class Archive(object):
-  __slots__ = ('secondsPerPoint', 'points', )
+  __slots__ = ('secondsPerPoint', 'points')
   def __init__(self, secondsPerPoint, points):
     self.secondsPerPoint = int(secondsPerPoint)
     self.points = int(points)
@@ -361,7 +345,7 @@ defaultArchive = Archive(60, 60 * 24 * 7)
 defaultSchema = DefaultSchema('default', [defaultArchive])
 
 
-def load_schemas(path, whitelist):
+def load_schemas(path):
   """
   Load storage schemas
   """
@@ -380,17 +364,14 @@ def load_schemas(path, whitelist):
   schemaList = []
   for section in sections:
     options = dict(config.items(section))
-    matchAll = options.get('match-all')
     pattern = options.get('pattern')
-    listName = options.get('list')
     retentions = options['retentions'].split(',')
     archives = [Archive.fromString(s) for s in retentions]
-    if matchAll:
-      mySchema = DefaultSchema(section, archives)
-    elif pattern:
+    if pattern:
       mySchema = PatternSchema(section, pattern, archives)
-    elif listName:
-      mySchema = ListSchema(section, listName, archives)
+    else:
+      log.err("Section missing 'pattern': %s" % section)
+      continue
     archiveList = [a.getTuple() for a in archives]
     try:
       whisper.validateArchiveList(archiveList)
@@ -410,7 +391,7 @@ def load_schemas(path, whitelist):
   return tables, schemaList
 
 
-def create_tables(schemas, whitelist, host='localhost',
+def create_tables(schemas, host='localhost',
                   port=9090, table_prefix='graphite',
                   transport='buffered', protocol='binary',
                   compat_level='0.94'):
@@ -441,7 +422,7 @@ def create_tables(schemas, whitelist, host='localhost',
     print("meta table available")
 
   print("Adding data tables")
-  tbls, _ = load_schemas(schemas, whitelist)
+  tbls, _ = load_schemas(schemas)
   for r in tbls:
     table_name, r_secs = r
     if table_name not in tables:

@@ -78,7 +78,6 @@ class HBaseDB(object):
     self.reset_time = 0
     self.client = None
     self.meta_table = None
-    self.reset_interval = 0
 
     # use the reset function only for consistent connection creation
     self.__reset_conn()
@@ -271,8 +270,9 @@ class HBaseDB(object):
       except Exception:
         log.err("Missing table %s" % t)
         pass
-    self.reset_time = time()
-    self.send_time = time()
+    t = time()
+    self.reset_time = t
+    self.send_time = t
 
   def __refresh_conn(self, wait_time=5):
     # flush data batches
@@ -311,6 +311,7 @@ class DefaultSchema(Schema):
     self.name = name
     self.archives = archives
 
+
 class PatternSchema(Schema):
   __slots__ = ('name', 'pattern', 'regex', 'archives')
   def __init__(self, name, pattern, archives):
@@ -319,23 +320,8 @@ class PatternSchema(Schema):
     self.regex = re.compile(pattern)
     self.archives = archives
 
-
-class ListSchema(Schema):
-  __slots__ = ('name', 'listName', 'archives', 'path',
-               'mtime', 'members')
-  def __init__(self, name, listName, archives):
-    self.name = name
-    self.listName = listName
-    self.archives = archives
-    self.path = join(settings.WHITELISTS_DIR, listName)
-    if exists(self.path):
-      self.mtime = os.stat(self.path).st_mtime
-      with open(self.path, 'rb') as fh:
-        self.members = pickle.load(fh)
-    else:
-      self.mtime = 0
-      self.members = frozenset()
-    return metric in self.members
+  def test(self, metric):
+    return self.regex.search(metric)
 
 
 class Archive(object):
@@ -380,17 +366,13 @@ def load_schemas(path, whitelist):
   schemaList = []
   for section in sections:
     options = dict(config.items(section))
-    matchAll = options.get('match-all')
     pattern = options.get('pattern')
-    listName = options.get('list')
     retentions = options['retentions'].split(',')
     archives = [Archive.fromString(s) for s in retentions]
-    if matchAll:
-      mySchema = DefaultSchema(section, archives)
-    elif pattern:
+    if pattern:
       mySchema = PatternSchema(section, pattern, archives)
-    elif listName:
-      mySchema = ListSchema(section, listName, archives)
+    else:
+      log.err("Section missing 'pattern': %s" % section)
     archiveList = [a.getTuple() for a in archives]
     try:
       whisper.validateArchiveList(archiveList)

@@ -270,8 +270,9 @@ class HBaseDB(object):
       except Exception:
         log.err("Missing table %s" % t)
         pass
-    self.reset_time = time()
-    self.send_time = time()
+    t = time()
+    self.reset_time = t
+    self.send_time = t
 
   def __refresh_conn(self, wait_time=5):
     # flush data batches
@@ -309,6 +310,7 @@ class DefaultSchema(Schema):
   def __init__(self, name, archives):
     self.name = name
     self.archives = archives
+
 
 class PatternSchema(Schema):
   __slots__ = ('name', 'pattern', 'regex', 'archives')

@@ -54,10 +54,10 @@ META_SUFFIX = "META"
 
 
 class HBaseDB(object):
-  __slots__ = ['thrift_host', 'thrift_port', 'transport_type', 'batch_size',
+  __slots__ = ('thrift_host', 'thrift_port', 'transport_type', 'batch_size',
                'reset_interval', 'connection_retries', 'protocol', 'table_prefix',
-               'compat_level', 'send_freq', 'schema', 'data_tables', 'data_batches',
-               'send_time', 'reset_time', 'reset_interval', 'client', 'meta_table']
+               'compat_level', 'send_freq', 'schemas', 'data_tables', 'data_batches',
+               'send_time', 'reset_time', 'reset_interval', 'client', 'meta_table')
   def __init__(self, settingsdict):
     self.thrift_host = settingsdict['host']
     self.thrift_port = settingsdict['port']
@@ -305,13 +305,13 @@ class Schema(object):
 
 
 class DefaultSchema(Schema):
-  __slots__ = ['name', 'archives']
+  __slots__ = ('name', 'archives')
   def __init__(self, name, archives):
     self.name = name
     self.archives = archives
 
 class PatternSchema(Schema):
-  __slots__ = ['name', 'pattern', 'regex', 'archives']
+  __slots__ = ('name', 'pattern', 'regex', 'archives')
   def __init__(self, name, pattern, archives):
     self.name = name
     self.pattern = pattern
@@ -324,7 +324,6 @@ class PatternSchema(Schema):
 
 class Archive(object):
   __slots__ = ('secondsPerPoint', 'points')
-
   def __init__(self, secondsPerPoint, points):
     self.secondsPerPoint = int(secondsPerPoint)
     self.points = int(points)

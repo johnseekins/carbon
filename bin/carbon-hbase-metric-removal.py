@@ -3,16 +3,6 @@ import argparse
 import sys
 import os
 from time import time
-from carbon.conf import settings
-from carbon.hbase import HBaseDB
-os.environ['DJANGO_SETTINGS_MODULE'] = 'graphite.settings'
-sys.path.append('/opt/graphite/webapp')
-from graphite.local_settings import CONF_DIR as gConfDir
-from graphite.finders import hbase, match_patterns
-from graphite.storage import FindQuery
-from graphite.node import LeafNode
-
-settings['CONF_DIR'] = gConfDir
 
 
 def _get_nodes(query):
@@ -77,8 +67,26 @@ def cli_opts():
     parser.add_argument('--dry-run', '-d',
                         action='store_true', dest='dry_run', default=False,
                         help="Don't actually delete anything")
+    parser.add_argument('-l', '--lib-dir',
+                        help='The carbon lib directory',
+                        action='store', dest='lib_dir',
+                        default='/opt/graphite/lib')
+    parser.add_argument('-w', '--web-dir',
+                        help='The graphite webapp directory',
+                        action='store', dest='web_dir',
+                        default='/opt/graphite/webapp/')
     return parser.parse_args()
 
 if __name__ == '__main__':
     opts = cli_opts()
+    sys.path.append(opts.lib_dir)
+    from carbon.conf import settings
+    from carbon.hbase import HBaseDB
+    os.environ['DJANGO_SETTINGS_MODULE'] = 'graphite.settings'
+    sys.path.append(opts.web_dir)
+    from graphite.local_settings import CONF_DIR as gConfDir
+    from graphite.finders import hbase, match_patterns
+    from graphite.storage import FindQuery
+    from graphite.node import LeafNode
+    settings['CONF_DIR'] = gConfDir
     metric_delete(opts.metric, opts.dry_run)

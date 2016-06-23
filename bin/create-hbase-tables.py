@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 import argparse
 import sys
 import os
@@ -26,10 +25,15 @@ from graphite.local_settings import CONF_DIR as gConfDir
 settings['CONF_DIR'] = gConfDir
 from carbon import hbase
 
-hbase.create_tables(os.path.join(settings['CONF_DIR'], 'storage-schemas.conf'),
-                    os.path.join(settings['CONF_DIR'], 'whitelist.conf'),
-                    host=settings['HBASE_THRIFT_HOST'],
-                    port=config['HBASE_THRIFT_PORT'],
-                    table_prefix=config['HBASE_TABLE_PREFIX'],
-                    transport=config['HBASE_TRANSPORT_TYPE'],
-                    protocol=config['HBASE_PROTOCOL'])
+try:
+    hbase.create_tables(os.path.join(settings['CONF_DIR'], 'storage-schemas.conf'),
+                        os.path.join(settings['CONF_DIR'], 'whitelist.conf'),
+                        host=settings['HBASE_THRIFT_HOST'],
+                        port=config['HBASE_THRIFT_PORT'],
+                        table_prefix=config['HBASE_TABLE_PREFIX'],
+                        transport=config['HBASE_TRANSPORT_TYPE'],
+                        protocol=config['HBASE_PROTOCOL'])
+except Exception:
+    print("Failed to read config options...trying defaults")
+    hbase.create_tables(os.path.join(settings['CONF_DIR'], 'storage-schemas.conf'),
+                    os.path.join(settings['CONF_DIR'], 'whitelist.conf'))

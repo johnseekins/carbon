@@ -54,10 +54,10 @@ META_SUFFIX = "META"
 
 
 class HBaseDB(object):
-  __slots__ = ['thrift_host', 'thrift_port', 'transport_type', 'batch_size',
+  __slots__ = ('thrift_host', 'thrift_port', 'transport_type', 'batch_size',
                'reset_interval', 'connection_retries', 'protocol', 'table_prefix',
-               'compat_level', 'send_freq', 'schema', 'data_tables', 'data_batches',
-               'send_time', 'reset_time', 'reset_interval', 'client', 'meta_table']
+               'compat_level', 'send_freq', 'schemas', 'data_tables', 'data_batches',
+               'send_time', 'reset_time', 'reset_interval', 'client', 'meta_table')
   def __init__(self, settingsdict):
     self.thrift_host = settingsdict['host']
     self.thrift_port = settingsdict['port']
@@ -69,7 +69,7 @@ class HBaseDB(object):
     self.table_prefix = settingsdict['prefix']
     self.compat_level = settingsdict['compat']
     self.send_freq = settingsdict['send_freq']
-    self.schema = settingsdict['m_schema']
+    self.schemas = settingsdict['m_schema']
 
     # variables that get defined elsewhere
     self.data_tables = {}
@@ -306,13 +306,13 @@ class Schema(object):
 
 
 class DefaultSchema(Schema):
-  __slots__ = ['name', 'archives']
+  __slots__ = ('name', 'archives')
   def __init__(self, name, archives):
     self.name = name
     self.archives = archives
 
 class PatternSchema(Schema):
-  __slots__ = ['name', 'pattern', 'regex', 'archives']
+  __slots__ = ('name', 'pattern', 'regex', 'archives')
   def __init__(self, name, pattern, archives):
     self.name = name
     self.pattern = pattern
@@ -321,8 +321,8 @@ class PatternSchema(Schema):
 
 
 class ListSchema(Schema):
-  __slots__ = ['name', 'listName', 'archives', 'path',
-               'mtime', 'members']
+  __slots__ = ('name', 'listName', 'archives', 'path',
+               'mtime', 'members')
   def __init__(self, name, listName, archives):
     self.name = name
     self.listName = listName
@@ -339,7 +339,7 @@ class ListSchema(Schema):
 
 
 class Archive(object):
-  __slots__ = ['secondsPerPoint', 'points']
+  __slots__ = ('secondsPerPoint', 'points')
   def __init__(self, secondsPerPoint, points):
     self.secondsPerPoint = int(secondsPerPoint)
     self.points = int(points)

@@ -311,6 +311,9 @@ class DefaultSchema(Schema):
     self.name = name
     self.archives = archives
 
+  def test(self, metric):
+    return True
+
 
 class PatternSchema(Schema):
   __slots__ = ('name', 'pattern', 'regex', 'archives')

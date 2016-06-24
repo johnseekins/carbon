@@ -347,11 +347,7 @@ defaultArchive = Archive(60, 60 * 24 * 7)
 defaultSchema = DefaultSchema('default', [defaultArchive])
 
 
-<<<<<<< HEAD
 def load_schemas(path):
-=======
-def load_schemas(path, whitelist):
->>>>>>> 87bfc16bc30ccf749c8531cc920343af6726b821
   """
   Load storage schemas
   """
@@ -377,10 +373,7 @@ def load_schemas(path, whitelist):
       mySchema = PatternSchema(section, pattern, archives)
     else:
       log.err("Section missing 'pattern': %s" % section)
-<<<<<<< HEAD
       continue
-=======
->>>>>>> 87bfc16bc30ccf749c8531cc920343af6726b821
     archiveList = [a.getTuple() for a in archives]
     try:
       whisper.validateArchiveList(archiveList)
@@ -400,11 +393,7 @@ def load_schemas(path, whitelist):
   return tables, schemaList
 
 
-<<<<<<< HEAD
 def create_tables(schemas, host='localhost',
-=======
-def create_tables(schemas, whitelist, host='localhost',
->>>>>>> 87bfc16bc30ccf749c8531cc920343af6726b821
                   port=9090, table_prefix='graphite',
                   transport='buffered', protocol='binary',
                   compat_level='0.94'):
@@ -435,11 +424,7 @@ def create_tables(schemas, whitelist, host='localhost',
     print("meta table available")
 
   print("Adding data tables")
-<<<<<<< HEAD
   tbls, _ = load_schemas(schemas)
-=======
-  tbls, _ = load_schemas(schemas, whitelist)
->>>>>>> 87bfc16bc30ccf749c8531cc920343af6726b821
   for r in tbls:
     table_name, r_secs = r
     if table_name not in tables:

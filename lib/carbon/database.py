@@ -146,12 +146,11 @@ else:
       reset_interval = settings.get('HBASE_RESET_INTERVAL', 3600) + randrange(120)
       connection_retries = settings.get('HBASE_CONNECTION_RETRIES', 3)
       protocol = settings.get('HBASE_PROTOCOL', 'binary')
-      table_prefix = settings.get('HBASE_TABLE_PREFIX', 'graphite')
       compat_level = settings.get('HBASE_COMPAT_LEVEL', '0.94')
 
       path = join(settings["CONF_DIR"], "storage-schemas.conf")
       whitelist = join(settings["CONF_DIR"], "whitelist.conf")
-      metric_schema, self.storage_schemas = load_schemas(path, whitelist)
+      metric_schema, self.storage_schemas = load_schemas(path)
 
       """
         We'll send batches aggressively
@@ -170,9 +169,8 @@ else:
       settingsdict = {'host': thrift_host, 'port': thrift_port,
                       'ttype': transport_type, 'batch': batch_size,
                       'reset_int': reset_interval, 'retries': connection_retries,
-                      'protocol': protocol, 'prefix': table_prefix,
-                      'compat': compat_level, 'send_freq': send_freq,
-                      'm_schema': metric_schema}
+                      'protocol': protocol, 'compat': compat_level,
+                      'send_freq': send_freq, 'm_schema': metric_schema}
       self.h_db = HBaseDB(settingsdict)
 
     def create(self, metric, retentions, xfilesfactor, aggregation_method):

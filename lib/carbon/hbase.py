@@ -51,11 +51,12 @@ of that table. So...
 META_CF_NAME = 'm'
 DATA_CF_NAME = 'd'
 META_SUFFIX = "META"
+TABLE_PREFIX = 'graphite'
 
 
 class HBaseDB(object):
   __slots__ = ('thrift_host', 'thrift_port', 'transport_type', 'batch_size',
-               'reset_interval', 'connection_retries', 'protocol', 'table_prefix',
+               'reset_interval', 'connection_retries', 'protocol',
                'compat_level', 'send_freq', 'schemas', 'data_tables', 'data_batches',
                'send_time', 'reset_time', 'reset_interval', 'client', 'meta_table')
   def __init__(self, settingsdict):
@@ -66,7 +67,6 @@ class HBaseDB(object):
     self.reset_interval = settingsdict['reset_int']
     self.connection_retries = settingsdict['retries']
     self.protocol = settingsdict['protocol']
-    self.table_prefix = settingsdict['prefix']
     self.compat_level = settingsdict['compat']
     self.send_freq = settingsdict['send_freq']
     self.schemas = settingsdict['m_schema']
@@ -237,7 +237,7 @@ class HBaseDB(object):
       pass
     self.client = happybase.Connection(host=self.thrift_host,
                                        port=self.thrift_port,
-                                       table_prefix=self.table_prefix,
+                                       table_prefix=TABLE_PREFIX,
                                        transport=self.transport_type,
                                        protocol=self.protocol,
                                        compat=self.compat_level,
@@ -396,13 +396,12 @@ def load_schemas(path):
   return tables, schemaList
 
 
-def create_tables(schemas, host='localhost',
-                  port=9090, table_prefix='graphite',
+def create_tables(schemas, host='localhost', port=9090,
                   transport='buffered', protocol='binary',
                   compat_level='0.94'):
   print("Making connection")
   client = happybase.Connection(host=host, port=int(port),
-                                table_prefix=table_prefix,
+                                table_prefix=TABLE_PREFIX,
                                 transport=transport,
                                 timeout=30000,
                                 compat=compat_level,
@@ -422,7 +421,7 @@ def create_tables(schemas, host='localhost',
   print("Add meta Table")
   if META_SUFFIX not in tables:
     client.create_table(META_SUFFIX, meta_families)
-    print('Created %s_%s!' % (table_prefix, META_SUFFIX))
+    print('Created %s_%s!' % (TABLE_PREFIX, META_SUFFIX))
   else:
     print("meta table available")
 
@@ -437,6 +436,6 @@ def create_tables(schemas, host='localhost',
                                       'max_versions': 1,
                                       'time_to_live': r_secs}}
       client.create_table(table_name, data_families)
-      print('Created %s_%s!' % (table_prefix, table_name))
+      print('Created %s_%s!' % (TABLE_PREFIX, table_name))
     else:
-      print("%s_%s available" % (table_prefix, table_name))
+      print("%s_%s available" % (TABLE_PREFIX, table_name))

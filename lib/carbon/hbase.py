@@ -49,6 +49,9 @@ of that table. So...
 2) 2851200 seconds
 """
 META_CF_NAME = 'm'
+META_NODE = "%s:NODE" % META_CF_NAME
+META_AGG = "%s:AGG" % META_CF_NAME
+META_AGG_METHOD = "%s:AGG_METHOD" % META_CF_NAME
 DATA_CF_NAME = 'd'
 META_SUFFIX = "META"
 TABLE_PREFIX = 'graphite'
@@ -89,9 +92,8 @@ class HBaseDB(object):
     metric -- the name of the metric to process
     retention_config, agg_ethod -- data on how this metric is "rolled up"
     """
-    values = {"%s:NODE" % META_CF_NAME: 'True',
-              "%s:AGG" % META_CF_NAME: json.dumps(retention_config),
-              "%s:AGG_METHOD" % META_CF_NAME: agg_method}
+    values = {META_NODE: 'True', META_AGG: json.dumps(retention_config),
+              META_AGG_METHOD: agg_method}
     metric_parts = metric.split('.')
     metric_key = ""
     prior_key = "ROOT"
@@ -110,9 +112,15 @@ class HBaseDB(object):
       # Make sure parent node exists and is linked
       parentLink = self.get_row(prior_key, column=[metric_name])
       if not parentLink:
-        self.meta_table.put(prior_key, {metric_name: metric_key})
+        try:
+          self.meta_table.put(prior_key, {metric_name: metric_key})
+        except Exception, e:
+          raise Exception(str(e))
     # Write the actual value
-    self.meta_table.put(metric, values)
+    try:
+      self.meta_table.put(metric, values)
+    except Exception, e:
+      raise Exception(str(e))
 
   def update_many(self, metric, points, reten_config):
     """
@@ -170,10 +178,9 @@ class HBaseDB(object):
     Keyword arguments:
     metric -- the name of the metric to process
     """
-    column_name = "%s:NODE" % META_CF_NAME
     try:
-      res = self.get_row(metric, column=[column_name])
-      metric_exists = bool(res[column_name])
+      res = self.get_row(metric, column=[META_NODE])
+      metric_exists = bool(res[META_NODE])
     except Exception:
       metric_exists = False
     return metric_exists
@@ -195,12 +202,11 @@ class HBaseDB(object):
     (at scale) causes *huge* memory usage in the web server.
     Consequently, the code won't *actually* update the index.
     """
-    column_name = "%s:NODE" % META_CF_NAME
-    scan = self.meta_table.scan(columns=[column_name])
+    scan = self.meta_table.scan(columns=[META_NODE])
     t = time()
     total_entries = 0
     for row in scan:
-      if bool(row[1][column_name]):
+      if bool(row[1][META_NODE]):
         # tmp_index.write('%s\n' % row[0])
         total_entries += 1
     # tmp_index.flush()

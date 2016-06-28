@@ -252,6 +252,8 @@ WHISPER_AUTOFLUSH = False
 # HBASE_TRANSPORT_TYPE = buffered
 # HBASE_PROTOCOL = binary
 # HBASE_COMPAT_LEVEL = 0.94
+# Snappy, lzo, etc.
+# HBASE_STORAGE_COMPRESSION = None
 
 # To configure special settings for the carbon-cache instance 'b', uncomment this:
 #[cache:b]

@@ -438,14 +438,12 @@ def create_tables(data_tables, compress=None, host='localhost',
   except Exception, e:
     raise Exception(e)
 
-  meta_families = {META_CF_NAME: {'compression': compress,
-                                  'block_cache_enabled': True,
-                                  'bloom_filter_type': "ROWCOL",
-                                  'max_versions': 1}}
-  data_families = {DATA_CF_NAME: {'compression': compress,
-                                  'block_cache_enabled': True,
-                                  'bloom_filter_type': "ROWCOL",
-                                  'max_versions': 1}}
+  tabledict = {'compression': compress,
+               'block_cache_enabled': True,
+               'bloom_filter_type': "ROWCOL",
+               'max_versions': 1}
+  meta_families = {META_CF_NAME: dict(tabledict)}
+  data_families = {DATA_CF_NAME: dict(tabledict)}
 
   if META_SUFFIX not in tables:
     client.create_table(META_SUFFIX, meta_families)

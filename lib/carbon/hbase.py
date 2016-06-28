@@ -29,9 +29,8 @@ leaf1
     - AGG_METHOD -> str
     - AGG -> json
 
-The data tables are hour-segmented lists of values for each metric, e.g.
-<metric>:<2 hour period> =>
-  (t:<normalized timestamp>:<actual timstamp> => <value>, etc.)
+The data tables are 2-hour-segmented lists of values for each metric, e.g.
+<metric>:<2 hour period> => (t:<normalized timestamp>:<actual timstamp> => <value>, etc.)
 
 Each table represents one "segment" of the retention policy e.g.
 With retention definition:
@@ -90,7 +89,8 @@ class HBaseDB(object):
 
     Keyword arguments:
     metric -- the name of the metric to process
-    retention_config, agg_ethod -- data on how this metric is "rolled up"
+    retention_config -- time ranges for this metrics "roll up"
+    agg_method -- function used to "roll up" this metric
     """
     values = {META_NODE: 'True', META_AGG: json.dumps(retention_config),
               META_AGG_METHOD: agg_method}
@@ -109,13 +109,10 @@ class HBaseDB(object):
       metric_name = "%s%s" % (metric_prefix, part)
       if metric_name == metric_prefix:
         continue
-      # Make sure parent node exists and is linked
-      parentLink = self.get_row(prior_key, column=[metric_name])
-      if not parentLink:
-        try:
-          self.meta_table.put(prior_key, {metric_name: metric_key})
-        except Exception, e:
-          raise Exception(str(e))
+      try:
+        self.meta_table.put(prior_key, {metric_name: metric_key})
+      except Exception, e:
+        raise Exception(str(e))
     # Write the actual value
     try:
       self.meta_table.put(metric, values)
@@ -173,7 +170,7 @@ class HBaseDB(object):
 
   def exists(self, metric):
     """
-    Does a metric exist
+    Does a metric exist?
 
     Keyword arguments:
     metric -- the name of the metric to process
@@ -188,15 +185,17 @@ class HBaseDB(object):
   def delete(self, metric):
     """
     Delete a metric
+
     Keyword arguments:
     metric -- the name of the metric to process
-
-    Since data tables have TTLs, we only have to delete meta entries
     """
+    # Since data tables have TTLs, we only have to delete meta entries
     self.meta_table.delete(metric)
 
   def build_index(self, tmp_index):
     """
+    Create the metric "index" for graphite-web
+
     We need this function for compatibility, be we shouldn't
     actually use it. The size of the index file it would create
     (at scale) causes *huge* memory usage in the web server.
@@ -216,6 +215,13 @@ class HBaseDB(object):
             (time() - t, total_entries))
 
   def get_row(self, row, column=None):
+    """
+    return the data from a row in the meta table
+
+    Keyword arguments:
+    row -- the row (metric name) to return data for
+    column -- return only data from a particular column
+    """
     if time() - self.reset_time > self.reset_interval:
       self.__refresh_conn()
     try:
@@ -359,6 +365,9 @@ defaultSchema = DefaultSchema('default', [defaultArchive])
 def load_schemas(path):
   """
   Load storage schemas
+
+  Keyword arguments:
+  path -- the filesystem path to the storage-schems.conf file
   """
   if not os.access(path, os.R_OK):
     raise CarbonConfigException("Error: Missing config file or wrong perms on %s" % path)
@@ -405,6 +414,17 @@ def load_schemas(path):
 def create_tables(schemas, host='localhost', port=9090,
                   transport='buffered', protocol='binary',
                   compat_level='0.94'):
+  """
+  Build all the HBase tables we'll need
+
+  Keyword arguments:
+  schemas -- storage-schemas.conf path
+  host -- a host running thrift
+  port -- the port the thrift instance is open on
+  transport -- The type of thrift transport (buffered, framed, etc.) to use
+  protocol -- The thrift protocol (binary, compact, etc.) to use
+  compat_level -- What version of HBase should we limit ourselves to?
+  """
   print("Making connection")
   client = happybase.Connection(host=host, port=int(port),
                                 table_prefix=TABLE_PREFIX,

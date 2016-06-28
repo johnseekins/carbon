@@ -126,7 +126,7 @@ else:
 
 
 try:
-  from carbon.hbase import HBaseDB, load_schemas
+  from carbon.hbase import HBaseDB, load_schemas, create_tables
   from random import randrange
 except ImportError:
   pass
@@ -149,9 +149,11 @@ else:
       compat_level = str(settings.get('HBASE_COMPAT_LEVEL', 0.94))
 
       path = join(settings["CONF_DIR"], "storage-schemas.conf")
-      whitelist = join(settings["CONF_DIR"], "whitelist.conf")
+      compression = settings.get("HBASE_STORAGE_COMPRESSION", None)
       metric_schema, self.storage_schemas = load_schemas(path)
 
+      create_tables(metric_schema, compression, thrift_host, thrift_port,
+                    transport_type, protocol, compat_level)
       """
         We'll send batches aggressively
       We batch to reduce writes, but we still want "real time" data.
@@ -170,7 +172,8 @@ else:
                       'ttype': transport_type, 'batch': batch_size,
                       'reset_int': reset_interval, 'retries': connection_retries,
                       'protocol': protocol, 'compat': compat_level,
-                      'send_freq': send_freq, 'm_schema': metric_schema}
+                      'send_freq': send_freq, 'm_schema': metric_schema,
+                      'compression': compression}
       self.h_db = HBaseDB(settingsdict)
 
     def create(self, metric, retentions, xfilesfactor, aggregation_method):

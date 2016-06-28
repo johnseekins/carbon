@@ -102,8 +102,12 @@ def writeCachedDataPoints():
         if not archiveConfig:
           raise Exception("No storage schema matched the metric '%s', check your storage-schemas.conf file." % metric)
 
-        log.creates("creating database file %s (archive=%s xff=%s agg=%s)" %
-                    (dbFilePath, archiveConfig, xFilesFactor, aggregationMethod))
+        if not dbFilePath:
+          log.creates("creating metric %s (archive=%s xff=%s agg=%s)" %
+                      (metric, archiveConfig, xFilesFactor, aggregationMethod))
+        else:
+          log.creates("creating database file %s (archive=%s xff=%s agg=%s)" %
+                      (dbFilePath, archiveConfig, xFilesFactor, aggregationMethod))
         try:
             state.database.create(metric, archiveConfig, xFilesFactor, aggregationMethod)
             instrumentation.increment('creates')

@@ -411,8 +411,8 @@ def load_schemas(path):
   return tables, schemaList
 
 
-def create_tables(schemas, host='localhost', port=9090,
-                  transport='buffered', protocol='binary',
+def create_tables(data_tables, compress=None, host='localhost',
+                  port=9090, transport='buffered', protocol='binary',
                   compat_level='0.94'):
   """
   Build all the HBase tables we'll need
@@ -425,7 +425,6 @@ def create_tables(schemas, host='localhost', port=9090,
   protocol -- The thrift protocol (binary, compact, etc.) to use
   compat_level -- What version of HBase should we limit ourselves to?
   """
-  print("Making connection")
   client = happybase.Connection(host=host, port=int(port),
                                 table_prefix=TABLE_PREFIX,
                                 transport=transport,
@@ -433,35 +432,32 @@ def create_tables(schemas, host='localhost', port=9090,
                                 compat=compat_level,
                                 protocol=protocol)
   sleep(0.25)
-  print("Getting list of tables")
   try:
     tables = client.tables()
-  except Exception:
-    print("HBase tables can't be retrieved. Cluster offline?")
-    exit(1)
+  except Exception, e:
+    raise Exception(e)
 
-  meta_families = {META_CF_NAME: {'compression': "Snappy",
+  meta_families = {META_CF_NAME: {'compression': compress,
                                   'block_cache_enabled': True,
                                   'bloom_filter_type': "ROWCOL",
                                   'max_versions': 1}}
-  print("Add meta Table")
+  data_families = {DATA_CF_NAME: {'compression': compress,
+                                  'block_cache_enabled': True,
+                                  'bloom_filter_type': "ROWCOL",
+                                  'max_versions': 1}}
+
   if META_SUFFIX not in tables:
     client.create_table(META_SUFFIX, meta_families)
-    print('Created %s_%s!' % (TABLE_PREFIX, META_SUFFIX))
-  else:
-    print("meta table available")
+    log.msg('Created HBase table %s_%s!' % (TABLE_PREFIX, META_SUFFIX))
 
-  print("Adding data tables")
-  tbls, _ = load_schemas(schemas)
-  for r in tbls:
+  for r in data_tables:
     table_name, r_secs = r
     if table_name not in tables:
-      data_families = {DATA_CF_NAME: {'compression': "Snappy",
-                                      'block_cache_enabled': True,
-                                      'bloom_filter_type': "ROWCOL",
-                                      'max_versions': 1,
-                                      'time_to_live': r_secs}}
-      client.create_table(table_name, data_families)
-      print('Created %s_%s!' % (TABLE_PREFIX, table_name))
-    else:
-      print("%s_%s available" % (TABLE_PREFIX, table_name))
+      data_families[DATA_CF_NAME]['time_to_live'] = r_secs
+      try:
+        client.create_table(table_name, data_families)
+      except Exception, e:
+        raise Exception(e)
+      log.msg('Created HBase table %s_%s!' % (TABLE_PREFIX, table_name))
+
+  client.close()

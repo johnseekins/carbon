@@ -14,21 +14,24 @@ def cli_opts():
                         help='The graphite webapp directory',
                         action='store', dest='web_dir',
                         default='/opt/graphite/webapp/')
+    parser.add_argument('-c', '--compress',
+                        help="Use snappy compression on tables",
+                        action='store_true', dest="compress",
+                        default=False)
     return parser.parse_args()
 
 opts = cli_opts()
 sys.path.append(opts.lib_dir)
-from carbon.conf import settings
 os.environ['DJANGO_SETTINGS_MODULE'] = 'graphite.settings'
 sys.path.append(opts.web_dir)
 from graphite.local_settings import CONF_DIR as gConfDir
+from carbon.conf import settings
 settings['CONF_DIR'] = gConfDir
 from carbon import hbase
 
 try:
     hbase.create_tables(os.path.join(settings['CONF_DIR'], 'storage-schemas.conf'),
-                        os.path.join(settings['CONF_DIR'], 'whitelist.conf'),
-                        host=settings['HBASE_THRIFT_HOST'],
+                        compress, host=settings['HBASE_THRIFT_HOST'],
                         port=config['HBASE_THRIFT_PORT'],
                         table_prefix=config['HBASE_TABLE_PREFIX'],
                         transport=config['HBASE_TRANSPORT_TYPE'],
@@ -36,4 +39,4 @@ try:
 except Exception:
     print("Failed to read config options...trying defaults")
     hbase.create_tables(os.path.join(settings['CONF_DIR'], 'storage-schemas.conf'),
-                    os.path.join(settings['CONF_DIR'], 'whitelist.conf'))
+                        compress)

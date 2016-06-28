@@ -444,6 +444,7 @@ def create_tables(data_tables, compress=None, host='localhost',
                'max_versions': 1}
   meta_families = {META_CF_NAME: dict(tabledict)}
   data_families = {DATA_CF_NAME: dict(tabledict)}
+  data_families[DATA_CF_NAME]['bloom_filter_type'] = 'ROW'
 
   if META_SUFFIX not in tables:
     client.create_table(META_SUFFIX, meta_families)

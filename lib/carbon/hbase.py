@@ -299,13 +299,13 @@ class HBaseDB(object):
         log.msg('Retrying connection to %s' % self.thrift_host)
         sleep(1)
         self.client.open()
+      except Exception:
+        pass
+      else:
         log.msg('Connection resumed...')
         cur_time = time()
         self.reset_time = cur_time
         self.send_time = cur_time
-      except Exception:
-        pass
-      else:
         break
     # While -> else Pretty cool, python. Pretty cool.
     else:

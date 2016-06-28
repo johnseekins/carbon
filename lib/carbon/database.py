@@ -146,7 +146,7 @@ else:
       reset_interval = settings.get('HBASE_RESET_INTERVAL', 3600) + randrange(120)
       connection_retries = settings.get('HBASE_CONNECTION_RETRIES', 3)
       protocol = settings.get('HBASE_PROTOCOL', 'binary')
-      compat_level = settings.get('HBASE_COMPAT_LEVEL', '0.94')
+      compat_level = str(settings.get('HBASE_COMPAT_LEVEL', 0.94))
 
       path = join(settings["CONF_DIR"], "storage-schemas.conf")
       whitelist = join(settings["CONF_DIR"], "whitelist.conf")

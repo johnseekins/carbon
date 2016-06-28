@@ -32,11 +32,9 @@ os.environ['DJANGO_SETTINGS_MODULE'] = 'graphite.settings'
 sys.path.append(opts.web_dir)
 from graphite.local_settings import CONF_DIR as gConfDir
 settings['CONF_DIR'] = gConfDir
-#from graphite.storage import HBaseFinder
-settings.HBASE = True
-from graphite.storage import Store
+from graphite.storage import HBaseFinder
 
-search = Store()
+search = HBaseFinder()
 print("Will search for %s" % opts.query)
 for o in search.find(opts.query):
     print(o.real_metric)

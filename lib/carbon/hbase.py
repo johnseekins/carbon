@@ -425,6 +425,7 @@ def create_tables(data_tables, compress=None, host='localhost',
   protocol -- The thrift protocol (binary, compact, etc.) to use
   compat_level -- What version of HBase should we limit ourselves to?
   """
+  log.msg("Verifying HBase tables exist")
   client = happybase.Connection(host=host, port=int(port),
                                 table_prefix=TABLE_PREFIX,
                                 transport=transport,

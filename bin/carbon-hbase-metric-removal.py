@@ -1,4 +1,4 @@
-#!/usr/local/rnt/bin/python
+#!/usr/bin/env python
 import argparse
 import sys
 import os
@@ -28,7 +28,7 @@ def _get_nodes(query):
 
 
 def metric_delete(metric, dry_run=False):
-    db = HbaseDB()
+    db = HBaseDB()
     if any(ex in metric for ex in patterns):
         print("Searching for %s" % metric)
         print("Larger patterns can take time...")

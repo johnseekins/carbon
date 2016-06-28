@@ -172,8 +172,7 @@ else:
                       'ttype': transport_type, 'batch': batch_size,
                       'reset_int': reset_interval, 'retries': connection_retries,
                       'protocol': protocol, 'compat': compat_level,
-                      'send_freq': send_freq, 'm_schema': metric_schema,
-                      'compression': compression}
+                      'send_freq': send_freq, 'm_schema': metric_schema}
       self.h_db = HBaseDB(settingsdict)
 
     def create(self, metric, retentions, xfilesfactor, aggregation_method):

@@ -1,6 +1,6 @@
 from time import time, sleep
 import os
-from os.path import join
+import sys
 from ConfigParser import ConfigParser
 import re
 import json
@@ -61,6 +61,7 @@ class HBaseDB(object):
                'reset_interval', 'connection_retries', 'protocol',
                'compat_level', 'send_freq', 'schemas', 'data_tables', 'data_batches',
                'send_time', 'reset_time', 'reset_interval', 'client', 'meta_table')
+
   def __init__(self, settingsdict):
     self.thrift_host = settingsdict['host']
     self.thrift_port = settingsdict['port']
@@ -314,11 +315,12 @@ class HBaseDB(object):
 
 class Schema(object):
   def matches(self, metric):
-    return bool( self.test(metric) )
+    return bool(self.test(metric))
 
 
 class DefaultSchema(Schema):
   __slots__ = ('name', 'archives')
+
   def __init__(self, name, archives):
     self.name = name
     self.archives = archives
@@ -329,6 +331,7 @@ class DefaultSchema(Schema):
 
 class PatternSchema(Schema):
   __slots__ = ('name', 'pattern', 'regex', 'archives')
+
   def __init__(self, name, pattern, archives):
     self.name = name
     self.pattern = pattern
@@ -341,6 +344,7 @@ class PatternSchema(Schema):
 
 class Archive(object):
   __slots__ = ('secondsPerPoint', 'points')
+
   def __init__(self, secondsPerPoint, points):
     self.secondsPerPoint = int(secondsPerPoint)
     self.points = int(points)
@@ -425,7 +429,7 @@ def create_tables(data_tables, compress=None, host='localhost',
   protocol -- The thrift protocol (binary, compact, etc.) to use
   compat_level -- What version of HBase should we limit ourselves to?
   """
-  log.msg("Verifying HBase tables exist")
+  sys.stdout.write("Verifying HBase tables exist")
   client = happybase.Connection(host=host, port=int(port),
                                 table_prefix=TABLE_PREFIX,
                                 transport=transport,
@@ -448,7 +452,7 @@ def create_tables(data_tables, compress=None, host='localhost',
 
   if META_SUFFIX not in tables:
     client.create_table(META_SUFFIX, meta_families)
-    log.msg('Created HBase table %s_%s!' % (TABLE_PREFIX, META_SUFFIX))
+    sys.stdout.write('Created HBase table %s_%s!' % (TABLE_PREFIX, META_SUFFIX))
 
   for r in data_tables:
     table_name, r_secs = r
@@ -458,6 +462,6 @@ def create_tables(data_tables, compress=None, host='localhost',
         client.create_table(table_name, data_families)
       except Exception, e:
         raise Exception(e)
-      log.msg('Created HBase table %s_%s!' % (TABLE_PREFIX, table_name))
+      sys.stdout.write('Created HBase table %s_%s!' % (TABLE_PREFIX, table_name))
 
   client.close()

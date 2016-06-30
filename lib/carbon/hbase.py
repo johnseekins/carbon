@@ -193,28 +193,6 @@ class HBaseDB(object):
     # Since data tables have TTLs, we only have to delete meta entries
     self.meta_table.delete(metric)
 
-  def build_index(self, tmp_index):
-    """
-    Create the metric "index" for graphite-web
-
-    We need this function for compatibility, be we shouldn't
-    actually use it. The size of the index file it would create
-    (at scale) causes *huge* memory usage in the web server.
-    Consequently, the code won't *actually* update the index.
-    """
-    scan = self.meta_table.scan(columns=[META_NODE])
-    t = time()
-    total_entries = 0
-    for row in scan:
-      if bool(row[1][META_NODE]):
-        # tmp_index.write('%s\n' % row[0])
-        total_entries += 1
-    # tmp_index.flush()
-    tmp_index.write("\n")
-    tmp_index.flush()
-    log.msg("[IndexSearcher] index rebuild took %.6f seconds (%d entries)" %
-            (time() - t, total_entries))
-
   def get_row(self, row, column=None):
     """
     return the data from a row in the meta table

@@ -183,16 +183,6 @@ class HBaseDB(object):
       metric_exists = False
     return metric_exists
 
-  def delete(self, metric):
-    """
-    Delete a metric
-
-    Keyword arguments:
-    metric -- the name of the metric to process
-    """
-    # Since data tables have TTLs, we only have to delete meta entries
-    self.meta_table.delete(metric)
-
   def get_row(self, row, column=None):
     """
     return the data from a row in the meta table

@@ -3,6 +3,31 @@ import argparse
 import sys
 import os
 from time import time
+import happybase
+
+patterns = ['{', '}', '[', ']', '*', '?']
+
+
+def _get_nodes(query):
+    """
+    Since find_nodes returns a generator,
+    we need to get *all* results from each search
+    or the recursion below will eat our generators
+    for lunch.
+    """
+    search_db = hbase.HBaseFinder()
+    metric_list = []
+    branch_list = []
+    for node in list(search_db.find_nodes(query)):
+        if isinstance(node, LeafNode):
+            metric_list.append(node.path)
+        else:
+            branch_list.append(node.path)
+            new_node = FindQuery(node.path, 0, time())
+            mlst, blst = _get_nodes(new_node)
+            metric_list.extend(mlst)
+            branch_list.extend(blst)
+    return metric_list, branch_list
 
 
 def cli_opts():
@@ -27,48 +52,32 @@ def cli_opts():
 if __name__ == '__main__':
     opts = cli_opts()
     sys.path.append(opts.lib_dir)
-    from carbon.conf import settings
+    from carbon.conf import settings, Settings
     os.environ['DJANGO_SETTINGS_MODULE'] = 'graphite.settings'
     sys.path.append(opts.web_dir)
     from graphite.local_settings import CONF_DIR as gConfDir
-    from graphite.finders import hbase, match_patterns
+    from graphite.finders import hbase
+    from graphite import finders
     from graphite.storage import FindQuery
     from graphite.node import LeafNode
+
+    settings = Settings()
+    settings.readFrom("%s/carbon.conf" % gConfDir, 'cache')
     settings['CONF_DIR'] = gConfDir
 
-    search_db = hbase.HBaseFinder()
+    parts = opts.metric.split('.')
+    if len(parts) < 2 and any(p in opts.metric for p in patterns):
+        print("Special case!")
+        print("Metric at base with wildcard!")
+        print("Due to how searching works in Graphite, Root nodes must be removed seperately.")
+        exit(1)
 
-    def _get_nodes(query):
-        """
-        Since find_nodes returns a generator,
-        we need to get *all* results from each search
-        or the recursion below will eat our generators
-        for lunch.
-        """
-        metric_list = []
-        branch_list = []
-        for node in list(search_db.find_nodes(query)):
-            if isinstance(node, LeafNode):
-                metric_list.append(node.path)
-            else:
-                branch_list.append(node.path)
-                new_node = FindQuery(node.path, 0, time())
-                mlst, blst = _get_nodes(new_node)
-                metric_list.extend(mlst)
-                branch_list.extend(blst)
+    print("Searching for %s" % opts.metric)
+    print("Larger patterns can take time...")
+    metric_query = FindQuery(opts.metric, 0, time())
+    metric_list, branch_list = _get_nodes(metric_query)
 
-        return metric_list, branch_list
-
-    if any(ex in metric for ex in patterns):
-        print("Searching for %s" % metric)
-        print("Larger patterns can take time...")
-        metric_query = FindQuery(metric, 0, time())
-        metric_list, branch_list = _get_nodes(metric_query)
-    else:
-        metric_list = [metric]
-        branch_list = [metric]
-
-    if dry_run:
+    if opts.dry_run:
         print("Would have deleted the following metrics:")
         print(metric_list)
         print("Would have deleted the following branches:")
@@ -76,7 +85,14 @@ if __name__ == '__main__':
         print("Exiting without deleting")
         exit(1)
 
-    batch = db.meta_table.batch(1000)
+    client = happybase.Connection(host=settings['HBASE_THRIFT_HOST'],
+                                  port=int(settings['HBASE_THRIFT_PORT']),
+                                  table_prefix='graphite',
+                                  transport=settings['HBASE_TRANSPORT_TYPE'],
+                                  timeout=30000,
+                                  compat=str(settings['HBASE_COMPAT_LEVEL']),
+                                  protocol=settings['HBASE_PROTOCOL'])
+    batch = client.table('META').batch()
     for metric in metric_list:
         print('Deleting metric %s' % metric)
         batch.delete(metric)

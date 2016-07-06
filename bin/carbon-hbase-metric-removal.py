@@ -5,8 +5,6 @@ import os
 from time import time
 import happybase
 
-patterns = ['{', '}', '[', ']', '*', '?']
-
 
 def _get_nodes(query):
   """
@@ -18,18 +16,30 @@ def _get_nodes(query):
   search_db = hbase.HBaseFinder()
   metric_list = []
   branch_list = []
+  column_list = []
   for node in list(search_db.find_nodes(query)):
-    if not node:
+    try:
+      path = node.path
+    except Exception:
       continue
     if isinstance(node, LeafNode):
-      metric_list.append(node.path)
+      metric_list.append(path)
     else:
-      branch_list.append(node.path)
-      new_node = FindQuery(node.path, 0, time())
-      mlst, blst = _get_nodes(new_node)
+      branch_list.append(path)
+      column_path = path.split('.')
+      if len(column_path) > 1:
+        head = '.'.join(column_path[:-1])
+        column = column_path[-1]
+        column_list.append((head, column))
+      else:
+        column_list.append(('ROOT', column_path[0]))
+      new_node = FindQuery(path, 0, time())
+      mlst, blst, clst = _get_nodes(new_node)
       metric_list.extend(mlst)
       branch_list.extend(blst)
-  return metric_list, branch_list
+      column_list.extend(clst)
+
+  return metric_list, branch_list, column_list
 
 
 def cli_opts():
@@ -67,17 +77,10 @@ if __name__ == '__main__':
   settings.readFrom("%s/carbon.conf" % gConfDir, 'cache')
   settings['CONF_DIR'] = gConfDir
 
-  parts = opts.metric.split('.')
-  if len(parts) < 2 and any(p in opts.metric for p in patterns):
-    print("Special case!")
-    print("Metric at base with wildcard!")
-    print("Due to how searching works in Graphite, Root nodes must be removed seperately.")
-    exit(1)
-
   print("Searching for %s" % opts.metric)
   print("Larger patterns can take time...")
   metric_query = FindQuery(opts.metric, 0, time())
-  metric_list, branch_list = _get_nodes(metric_query)
+  metric_list, branch_list, column_list = _get_nodes(metric_query)
 
   if opts.dry_run:
     print("Would have deleted the following metrics:")
@@ -102,4 +105,9 @@ if __name__ == '__main__':
   for branch in branch_list:
     print('Deleting branch %s' % branch)
     batch.delete(branch)
+
+  for column in column_list:
+    print("Deleting column m:c_%s from row %s" % (column[1], column[0]))
+    batch.delete(column[0], columns=['m:c_%s' % column[1]])
+
   batch.send()

@@ -87,6 +87,8 @@ if __name__ == '__main__':
     print(metric_list)
     print("Would have deleted the following branches:")
     print(branch_list)
+    print("Would have deleted the following columns:")
+    print(column_list)
     print("Exiting without deleting")
     exit(1)
 

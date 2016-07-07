@@ -343,9 +343,9 @@ def load_schemas(schema_path, agg_path):
   agg_path -- the filesystem path to the storage-aggregation.conf file
   """
   if not os.access(schema_path, os.R_OK):
-    raise CarbonConfigException("Error: Missing config file or wrong perms on %s" % path)
+    raise CarbonConfigException("Error: Missing config file or wrong perms on %s" % schema_path)
   config = ConfigParser()
-  config.read(path)
+  config.read(schema_path)
   sections = []
   for line in open(path):
     line = line.strip()

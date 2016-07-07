@@ -228,6 +228,10 @@ WHISPER_AUTOFLUSH = False
 # Example: store everything
 # BIND_PATTERNS = #
 
+# Memcache settings (for reducing reads in the cluster)
+#
+# MEMCACHE_SERVERS = localhost:11211,
+
 # HBase storage settings (requires DATABASE to be set to 'hbase')
 #
 # Host and Port are obviously the thrift host you will be connecting to

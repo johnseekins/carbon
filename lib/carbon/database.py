@@ -147,6 +147,9 @@ else:
       connection_retries = settings.get('HBASE_CONNECTION_RETRIES', 3)
       protocol = settings.get('HBASE_PROTOCOL', 'binary')
       compat_level = str(settings.get('HBASE_COMPAT_LEVEL', 0.94))
+      memcache_hosts = settings.get('MEMCACHE_SERVERS', [])
+      if memcache_hosts:
+        memcache_hosts = [m.strip() for m in memcache_hosts.split(',') if m]
 
       schema_path = join(settings["CONF_DIR"], "storage-schemas.conf")
       agg_path = join(settings["CONF_DIR"], "storage-aggregation.conf")
@@ -173,7 +176,8 @@ else:
                       'ttype': transport_type, 'batch': batch_size,
                       'reset_int': reset_interval, 'retries': connection_retries,
                       'protocol': protocol, 'compat': compat_level,
-                      'send_freq': send_freq, 'm_schema': metric_schema}
+                      'send_freq': send_freq, 'm_schema': metric_schema,
+                      'memcache': memcache_hosts}
       self.h_db = HBaseDB(settingsdict)
 
     def create(self, metric, retentions, xfilesfactor, aggregation_method):

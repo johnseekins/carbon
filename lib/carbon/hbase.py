@@ -7,6 +7,7 @@ from carbon.exceptions import CarbonConfigException
 from carbon import log
 import happybase
 import whisper
+import pylibmc
 """
 We manage a namespace table (NS) and a group of data tables.
 
@@ -59,7 +60,8 @@ class HBaseDB(object):
   __slots__ = ('thrift_host', 'thrift_port', 'transport_type', 'batch_size',
                'reset_interval', 'connection_retries', 'protocol',
                'compat_level', 'send_freq', 'schemas', 'data_tables', 'data_batches',
-               'send_time', 'reset_time', 'reset_interval', 'client', 'meta_table')
+               'send_time', 'reset_time', 'reset_interval', 'client', 'meta_table',
+               'memcache_conn', 'memcache_hosts')
 
   def __init__(self, settingsdict):
     self.thrift_host = settingsdict['host']
@@ -72,6 +74,7 @@ class HBaseDB(object):
     self.compat_level = settingsdict['compat']
     self.send_freq = settingsdict['send_freq']
     self.schemas = settingsdict['m_schema']
+    self.memcache_hosts = settingsdict['memcache']
 
     # variables that get defined elsewhere
     self.data_tables = {}
@@ -175,35 +178,29 @@ class HBaseDB(object):
     Keyword arguments:
     metric -- the name of the metric to process
     """
+    if time() - self.reset_time > self.reset_interval:
+      self.__refresh_conn()
+    res = None
+    if self.memcache_conn:
+      res = self.memcache_conn.get(metric)
+      if res:
+        self.memcache_conn.set(metric, True, self.reset_interval)
+        return res
     try:
-      res = self.get_row(metric, column=[META_NODE])
+      res = self.meta_table.row(metric)
+    except Exception:
+      self.__refresh_conn()
+      res = self.meta_table.row(metric)
+
+    try:
       metric_exists = bool(res[META_NODE])
     except Exception:
       metric_exists = False
+
+    if metric_exists and self.memcache_conn:
+      self.memcache_conn.set(metric, True, self.reset_interval)
+
     return metric_exists
-
-  def get_row(self, row, column=None):
-    """
-    return the data from a row in the meta table
-
-    Keyword arguments:
-    row -- the row (metric name) to return data for
-    column -- return only data from a particular column
-    """
-    if time() - self.reset_time > self.reset_interval:
-      self.__refresh_conn()
-    try:
-      if column:
-        res = self.meta_table.row(row, column)
-      else:
-        res = self.meta_table.row(row)
-    except Exception:
-      self.__refresh_conn()
-      if column:
-        res = self.meta_table.row(row, column)
-      else:
-        res = self.meta_table.row(row)
-    return res
 
   def __make_conn(self):
     """
@@ -230,6 +227,20 @@ class HBaseDB(object):
     except Exception, e:
       return False, e
 
+  def _memcache_connect(self):
+    try:
+      del self.memcache_conn
+    except Exception:
+      pass
+
+    if self.memcache_hosts and isinstance(self.memcache_hosts, list):
+      try:
+        self.memcache_conn = pylibmc.Client(self.memcache_hosts, binary=True,
+                                            behaviors={'no_block': True,
+                                                       'remove_failed': True})
+      except Exception:
+        self.memcache_conn = None
+
   def __reset_conn(self):
     for conn in xrange(self.connection_retries):
       res, e = self.__make_conn()
@@ -238,6 +249,8 @@ class HBaseDB(object):
     else:
       log.err('Cannot get connection to HBase because %s' % e)
       exit(2)
+
+    self._memcache_connect()
     self.meta_table = self.client.table(META_SUFFIX)
     self.data_tables = {}
     self.data_batches = {}
@@ -271,6 +284,7 @@ class HBaseDB(object):
         pass
       else:
         log.msg('Connection resumed...')
+        self._memcache_connect()
         cur_time = time()
         self.reset_time = cur_time
         self.send_time = cur_time
@@ -375,7 +389,7 @@ def load_schemas(schema_path, agg_path):
   config = ConfigParser()
   config.read(schema_path)
   sections = []
-  for line in open(path):
+  for line in open(schema_path):
     line = line.strip()
     if line.startswith('[') and line.endswith(']'):
       sections.append(line[1:-1])

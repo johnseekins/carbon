@@ -89,6 +89,7 @@ defaults = dict(
   RELAY_RULES='relay-rules.conf',
   ENABLE_LOGROTATION=True,
   METRIC_CLIENT_IDLE_TIMEOUT=None,
+  MEMCACHE_HOSTS=['localhost:11211'],
   HBASE_THRIFT_HOST='localhost',
   HBASE_THRIFT_PORT=9090,
   HBASE_BATCH_SIZE=100,

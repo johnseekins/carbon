@@ -280,6 +280,34 @@ class HBaseDB(object):
       self.__reset_conn()
 
 
+class OrderedConfigParser(ConfigParser):
+  """Hacky workaround to ensure sections are always returned in the order
+   they are defined in. Note that this does *not* make any guarantees about
+   the order of options within a section or the order in which sections get
+   written back to disk on write()."""
+  _ordered_sections = []
+
+  def read(self, path):
+    # Verifies a file exists *and* is readable
+    if not os.access(path, os.R_OK):
+        raise CarbonConfigException("Error: Missing config file or wrong perms on %s" % path)
+
+    result = ConfigParser.read(self, path)
+    sections = []
+    for line in open(path):
+      line = line.strip()
+
+      if line.startswith('[') and line.endswith(']'):
+        sections.append( line[1:-1] )
+
+    self._ordered_sections = sections
+
+    return result
+
+  def sections(self):
+    return list( self._ordered_sections ) # return a copy for safety
+
+
 class Schema(object):
   def matches(self, metric):
     return bool(self.test(metric))

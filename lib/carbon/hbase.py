@@ -1,6 +1,5 @@
 from time import time, sleep
 import os
-import sys
 from ConfigParser import ConfigParser
 import re
 import json
@@ -332,16 +331,24 @@ class Archive(object):
 # default retention for unclassified data (7 days of minutely data)
 defaultArchive = Archive(60, 60 * 24 * 7)
 defaultSchema = DefaultSchema('default', [defaultArchive])
+defaultAggregation = DefaultSchema('default', (None, None))
 
 
-def load_schemas(path):
+def loadAggregationSchemas():
+  # NOTE: This abuses the Schema classes above, and should probably be refactored.
+
+  return schemaList
+
+
+def load_schemas(schema_path, agg_path):
   """
   Load storage schemas
 
   Keyword arguments:
-  path -- the filesystem path to the storage-schems.conf file
+  schema_path -- the filesystem path to the storage-schems.conf file
+  agg_path -- the filesystem path to the storage-aggregation.conf file
   """
-  if not os.access(path, os.R_OK):
+  if not os.access(schema_path, os.R_OK):
     raise CarbonConfigException("Error: Missing config file or wrong perms on %s" % path)
   config = ConfigParser()
   config.read(path)
@@ -380,7 +387,44 @@ def load_schemas(path):
     for f in full_reten:
       r_secs += f[0] * f[1]
       tables.append(("%s.%s" % (f[0], reten_str), r_secs))
-  return tables, schemaList
+
+  aggList = []
+  config = OrderedConfigParser()
+
+  try:
+    config.read(agg_path)
+  except (IOError, CarbonConfigException):
+    log.msg("%s not found or wrong perms, ignoring." % agg_path)
+
+  for section in config.sections():
+    options = dict(config.items(section))
+    pattern = options.get('pattern')
+
+    xFilesFactor = options.get('xfilesfactor')
+    aggregationMethod = options.get('aggregationmethod')
+
+    try:
+      if xFilesFactor is not None:
+        xFilesFactor = float(xFilesFactor)
+        assert 0 <= xFilesFactor <= 1
+      if aggregationMethod is not None:
+        assert aggregationMethod in whisper.aggregationMethods
+    except ValueError:
+      log.msg("Invalid schemas found in %s." % section)
+      continue
+
+    archives = (xFilesFactor, aggregationMethod)
+
+    if pattern:
+      mySchema = PatternSchema(section, pattern, archives)
+    else:
+      log.err("Section missing 'pattern': %s" % section)
+      continue
+    aggList.append(mySchema)
+  aggList.append(defaultAggregation)
+
+  return {'storage': {'tables': tables, 'schemaList': schemaList},
+          'aggregation': aggList}
 
 
 def create_tables(data_tables, compress=None, host='localhost',
@@ -397,11 +441,9 @@ def create_tables(data_tables, compress=None, host='localhost',
   protocol -- The thrift protocol (binary, compact, etc.) to use
   compat_level -- What version of HBase should we limit ourselves to?
   """
-  sys.stdout.write("Verifying HBase tables exist")
   client = happybase.Connection(host=host, port=int(port),
                                 table_prefix=TABLE_PREFIX,
                                 transport=transport,
-                                timeout=30000,
                                 compat=compat_level,
                                 protocol=protocol)
   sleep(0.25)
@@ -412,15 +454,13 @@ def create_tables(data_tables, compress=None, host='localhost',
 
   tabledict = {'compression': compress,
                'block_cache_enabled': True,
-               'bloom_filter_type': "ROWCOL",
+               'bloom_filter_type': "ROW",
                'max_versions': 1}
   meta_families = {META_CF_NAME: dict(tabledict)}
   data_families = {DATA_CF_NAME: dict(tabledict)}
-  data_families[DATA_CF_NAME]['bloom_filter_type'] = 'ROW'
 
   if META_SUFFIX not in tables:
     client.create_table(META_SUFFIX, meta_families)
-    sys.stdout.write('Created HBase table %s_%s!' % (TABLE_PREFIX, META_SUFFIX))
 
   for r in data_tables:
     table_name, r_secs = r
@@ -430,6 +470,5 @@ def create_tables(data_tables, compress=None, host='localhost',
         client.create_table(table_name, data_families)
       except Exception, e:
         raise Exception(e)
-      sys.stdout.write('Created HBase table %s_%s!' % (TABLE_PREFIX, table_name))
 
   client.close()

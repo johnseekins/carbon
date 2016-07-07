@@ -148,9 +148,10 @@ else:
       protocol = settings.get('HBASE_PROTOCOL', 'binary')
       compat_level = str(settings.get('HBASE_COMPAT_LEVEL', 0.94))
 
-      path = join(settings["CONF_DIR"], "storage-schemas.conf")
+      schema_path = join(settings["CONF_DIR"], "storage-schemas.conf")
+      agg_path = join(settings["CONF_DIR"], "storage-aggregation.conf")
       compression = settings.get("HBASE_STORAGE_COMPRESSION", None)
-      metric_schema, self.storage_schemas = load_schemas(path)
+      metric_schema, self.storage_schemas, self.agg_list = load_schemas(schema_path, agg_path)
 
       create_tables(metric_schema, compression, thrift_host, thrift_port,
                     transport_type, protocol, compat_level)
@@ -179,7 +180,16 @@ else:
       self.h_db.create(metric, retentions, aggregation_method)
 
     def getMetaData(self, metric, key):
-      return self.get_row(metric)['AGG_METHOD']
+      if key != 'aggregationMethod':
+        raise ValueError("Unsupported metadata key \"%s\"" % key)
+
+      agg_method = 'average'
+      for agg in self.agg_list:
+        if agg.test(metric):
+          agg_method = agg.archives[1]
+          break
+
+      return agg_method
 
     def write(self, metric, points):
       reten_config = []

@@ -148,13 +148,13 @@ else:
       protocol = settings.get('HBASE_PROTOCOL', 'binary')
       compat_level = str(settings.get('HBASE_COMPAT_LEVEL', 0.94))
       memcache_hosts = settings.get('MEMCACHE_SERVERS', [])
-      if memcache_hosts:
+      if memcache_hosts and not isinstance(memcache_hosts, list):
         memcache_hosts = [m.strip() for m in memcache_hosts.split(',') if m]
 
       schema_path = join(settings["CONF_DIR"], "storage-schemas.conf")
       agg_path = join(settings["CONF_DIR"], "storage-aggregation.conf")
       compression = settings.get("HBASE_STORAGE_COMPRESSION", None)
-      metric_schema, self.storage_schemas, self.agg_list = load_schemas(schema_path, agg_path)
+      metric_schema, self.storage_schemas = load_schemas(schema_path)
 
       create_tables(metric_schema, compression, thrift_host, thrift_port,
                     transport_type, protocol, compat_level)
@@ -187,13 +187,7 @@ else:
       if key != 'aggregationMethod':
         raise ValueError("Unsupported metadata key \"%s\"" % key)
 
-      agg_method = 'average'
-      for agg in self.agg_list:
-        if agg.test(metric):
-          agg_method = agg.archives[1]
-          break
-
-      return agg_method
+      return self.h_db.get_metric(metric)
 
     def write(self, metric, points):
       reten_config = []

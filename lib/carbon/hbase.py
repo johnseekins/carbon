@@ -180,11 +180,21 @@ class HBaseDB(object):
     """
     if time() - self.reset_time > self.reset_interval:
       self.__refresh_conn()
+    res = self.get_metric(metric)
+
+    try:
+      res = bool(res[META_NODE])
+    except Exception:
+      res = False
+
+    return res
+
+  def get_metric(self, metric):
     res = None
     if self.memcache_conn:
       res = self.memcache_conn.get(metric)
       if res:
-        self.memcache_conn.set(metric, True, self.reset_interval)
+        self.memcache_conn.set(metric, res, self.reset_interval)
         return res
     try:
       res = self.meta_table.row(metric)
@@ -192,15 +202,9 @@ class HBaseDB(object):
       self.__refresh_conn()
       res = self.meta_table.row(metric)
 
-    try:
-      metric_exists = bool(res[META_NODE])
-    except Exception:
-      metric_exists = False
-
-    if metric_exists and self.memcache_conn:
-      self.memcache_conn.set(metric, True, self.reset_interval)
-
-    return metric_exists
+    if res and self.memcache_conn:
+      self.memcache_conn.set(metric, res, self.reset_interval)
+    return res
 
   def __make_conn(self):
     """
@@ -294,34 +298,6 @@ class HBaseDB(object):
       self.__reset_conn()
 
 
-class OrderedConfigParser(ConfigParser):
-  """Hacky workaround to ensure sections are always returned in the order
-   they are defined in. Note that this does *not* make any guarantees about
-   the order of options within a section or the order in which sections get
-   written back to disk on write()."""
-  _ordered_sections = []
-
-  def read(self, path):
-    # Verifies a file exists *and* is readable
-    if not os.access(path, os.R_OK):
-        raise CarbonConfigException("Error: Missing config file or wrong perms on %s" % path)
-
-    result = ConfigParser.read(self, path)
-    sections = []
-    for line in open(path):
-      line = line.strip()
-
-      if line.startswith('[') and line.endswith(']'):
-        sections.append( line[1:-1] )
-
-    self._ordered_sections = sections
-
-    return result
-
-  def sections(self):
-    return list( self._ordered_sections ) # return a copy for safety
-
-
 class Schema(object):
   def matches(self, metric):
     return bool(self.test(metric))
@@ -373,10 +349,9 @@ class Archive(object):
 # default retention for unclassified data (7 days of minutely data)
 defaultArchive = Archive(60, 60 * 24 * 7)
 defaultSchema = DefaultSchema('default', [defaultArchive])
-defaultAggregation = DefaultSchema('default', (None, None))
 
 
-def load_schemas(schema_path, agg_path):
+def load_schemas(schema_path):
   """
   Load storage schemas
 
@@ -424,42 +399,7 @@ def load_schemas(schema_path, agg_path):
       r_secs += f[0] * f[1]
       tables.append(("%s.%s" % (f[0], reten_str), r_secs))
 
-  aggList = []
-  config = OrderedConfigParser()
-
-  try:
-    config.read(agg_path)
-  except (IOError, CarbonConfigException):
-    log.msg("%s not found or wrong perms, ignoring." % agg_path)
-
-  for section in config.sections():
-    options = dict(config.items(section))
-    pattern = options.get('pattern')
-
-    xFilesFactor = options.get('xfilesfactor')
-    aggregationMethod = options.get('aggregationmethod')
-
-    try:
-      if xFilesFactor is not None:
-        xFilesFactor = float(xFilesFactor)
-        assert 0 <= xFilesFactor <= 1
-      if aggregationMethod is not None:
-        assert aggregationMethod in whisper.aggregationMethods
-    except ValueError:
-      log.msg("Invalid schemas found in %s." % section)
-      continue
-
-    archives = (xFilesFactor, aggregationMethod)
-
-    if pattern:
-      mySchema = PatternSchema(section, pattern, archives)
-    else:
-      log.err("Section missing 'pattern': %s" % section)
-      continue
-    aggList.append(mySchema)
-  aggList.append(defaultAggregation)
-
-  return tables, schemaList, aggList
+  return tables, schemaList
 
 
 def create_tables(data_tables, compress=None, host='localhost',

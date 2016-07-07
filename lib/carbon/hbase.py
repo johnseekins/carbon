@@ -334,12 +334,6 @@ defaultSchema = DefaultSchema('default', [defaultArchive])
 defaultAggregation = DefaultSchema('default', (None, None))
 
 
-def loadAggregationSchemas():
-  # NOTE: This abuses the Schema classes above, and should probably be refactored.
-
-  return schemaList
-
-
 def load_schemas(schema_path, agg_path):
   """
   Load storage schemas
@@ -423,8 +417,7 @@ def load_schemas(schema_path, agg_path):
     aggList.append(mySchema)
   aggList.append(defaultAggregation)
 
-  return {'storage': {'tables': tables, 'schemaList': schemaList},
-          'aggregation': aggList}
+  return tables, schemaList, aggList
 
 
 def create_tables(data_tables, compress=None, host='localhost',

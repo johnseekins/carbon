@@ -192,9 +192,23 @@ class HBaseDB(object):
   def get_metric(self, metric):
     res = None
     if self.memcache_conn:
-      res = self.memcache_conn.get(metric)
-      if res:
-        self.memcache_conn.set(metric, res, self.reset_interval)
+      try:
+        res = self.memcache_conn.get(metric)
+      except Exception:
+        self._memcache_connect()
+        try:
+          self.memcache_conn.get(metric)
+        except Exception:
+          res = None
+      else:
+        try:
+          self.memcache_conn.set(metric, res, self.reset_interval)
+        except Exception:
+          self._memcache_connect()
+          try:
+            self.memcache_conn.set(metric, res, self.reset_interval)
+          except Exception:
+            pass
         return res
     try:
       res = self.meta_table.row(metric)
@@ -203,7 +217,14 @@ class HBaseDB(object):
       res = self.meta_table.row(metric)
 
     if res and self.memcache_conn:
-      self.memcache_conn.set(metric, res, self.reset_interval)
+      try:
+        self.memcache_conn.set(metric, res, self.reset_interval)
+      except Exception:
+        self._memcache_connect()
+        try:
+          self.memcache_conn.set(metric, res, self.reset_interval)
+        except Exception:
+          pass
     return res
 
   def __make_conn(self):

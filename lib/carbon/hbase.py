@@ -195,20 +195,12 @@ class HBaseDB(object):
       try:
         res = self.memcache_conn.get(metric)
       except Exception:
-        self._memcache_connect()
-        try:
-          self.memcache_conn.get(metric)
-        except Exception:
-          res = None
+        res = None
       else:
         try:
           self.memcache_conn.set(metric, res, self.reset_interval)
         except Exception:
-          self._memcache_connect()
-          try:
-            self.memcache_conn.set(metric, res, self.reset_interval)
-          except Exception:
-            pass
+          pass
         return res
     try:
       res = self.meta_table.row(metric)
@@ -220,11 +212,7 @@ class HBaseDB(object):
       try:
         self.memcache_conn.set(metric, res, self.reset_interval)
       except Exception:
-        self._memcache_connect()
-        try:
-          self.memcache_conn.set(metric, res, self.reset_interval)
-        except Exception:
-          pass
+        pass
     return res
 
   def __make_conn(self):
@@ -305,6 +293,7 @@ class HBaseDB(object):
         log.msg('Retrying connection to %s' % self.thrift_host)
         sleep(1)
         self.client.open()
+        self._memcache_connect()
       except Exception:
         pass
       else:

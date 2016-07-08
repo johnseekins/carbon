@@ -165,6 +165,8 @@ else:
       This means we have to write fairly frequently (send_freq) so
       more fine-grained data (<1 minute, etc) still shows rapidly.
       The trade-off is that we're doing more smaller writes this way.
+      Archive tuples be like (<step>, <number of points>), so we'll
+      want item 0 from each tuple.
       """
       send_freq = 60
       for s in self.storage_schemas:
@@ -187,7 +189,7 @@ else:
       if key != 'aggregationMethod':
         raise ValueError("Unsupported metadata key \"%s\"" % key)
 
-      return self.h_db.get_metric(metric)
+      return self.h_db.get_metric(metric)['AGG_METHOD']
 
     def write(self, metric, points):
       reten_config = []

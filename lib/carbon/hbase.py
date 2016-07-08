@@ -7,7 +7,10 @@ from carbon.exceptions import CarbonConfigException
 from carbon import log
 import happybase
 import whisper
-import pylibmc
+try:
+  import pylibmc
+except ImportError:
+  pylibmc = False
 """
 We manage a namespace table (NS) and a group of data tables.
 
@@ -241,6 +244,8 @@ class HBaseDB(object):
       return False, e
 
   def _memcache_connect(self):
+    if not pylibmc:
+      return
     try:
       del self.memcache_conn
     except Exception:
@@ -248,9 +253,9 @@ class HBaseDB(object):
 
     if self.memcache_hosts and isinstance(self.memcache_hosts, list):
       try:
-        self.memcache_conn = pylibmc.Client(self.memcache_hosts, binary=True,
-                                            behaviors={'no_block': True,
-                                                       'remove_failed': True})
+        self.memcache_conn = memcache.Client(self.memcache_hosts, binary=True,
+                                             behaviors={'no_block': True,
+                                                        'remove_failed': True})
       except Exception:
         self.memcache_conn = None
 
@@ -298,7 +303,6 @@ class HBaseDB(object):
         pass
       else:
         log.msg('Connection resumed...')
-        self._memcache_connect()
         cur_time = time()
         self.reset_time = cur_time
         self.send_time = cur_time

@@ -147,7 +147,7 @@ else:
       connection_retries = settings.get('HBASE_CONNECTION_RETRIES', 3)
       protocol = settings.get('HBASE_PROTOCOL', 'binary')
       compat_level = str(settings.get('HBASE_COMPAT_LEVEL', 0.94))
-      memcache_hosts = settings.get('MEMCACHE_SERVERS', [])
+      memcache_hosts = settings.get('MEMCACHE_HOSTS', [])
       if memcache_hosts and not isinstance(memcache_hosts, list):
         memcache_hosts = [m.strip() for m in memcache_hosts.split(',') if m]
 

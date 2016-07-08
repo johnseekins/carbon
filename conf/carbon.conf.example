@@ -230,7 +230,7 @@ WHISPER_AUTOFLUSH = False
 
 # Memcache settings (for reducing reads in the cluster)
 #
-# MEMCACHE_SERVERS = localhost:11211,
+# MEMCACHE_HOSTS = localhost:11211,
 
 # HBase storage settings (requires DATABASE to be set to 'hbase')
 #

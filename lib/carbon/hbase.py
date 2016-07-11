@@ -253,9 +253,9 @@ class HBaseDB(object):
 
     if self.memcache_hosts and isinstance(self.memcache_hosts, list):
       try:
-        self.memcache_conn = memcache.Client(self.memcache_hosts, binary=True,
-                                             behaviors={'no_block': True,
-                                                        'remove_failed': True})
+        self.memcache_conn = pylibmc.Client(self.memcache_hosts, binary=True,
+                                            behaviors={'no_block': True,
+                                                       'remove_failed': True})
       except Exception:
         self.memcache_conn = None
 

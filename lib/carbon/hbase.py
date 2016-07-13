@@ -57,7 +57,7 @@ META_AGG_METHOD = "%s:AGG_METHOD" % META_CF_NAME
 DATA_CF_NAME = 'd'
 META_SUFFIX = "META"
 TABLE_PREFIX = 'graphite'
-
+ROW_SIZE = 7200
 
 class HBaseDB(object):
   __slots__ = ('thrift_host', 'thrift_port', 'transport_type', 'batch_size',
@@ -147,7 +147,7 @@ class HBaseDB(object):
       and sparser metrics (15 minutes).
       We determine the row by "flooring" the timestamp of this particular point
       """
-      row = int(timestamp / 7200) * 7200
+      row = int(timestamp / ROW_SIZE) * ROW_SIZE
       rowkey = "%s:%d" % (metric, row)
       # Write to every table at once
       for r in reten_config:

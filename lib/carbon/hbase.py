@@ -176,7 +176,7 @@ class HBaseDB(object):
 
   def exists(self, metric):
     """
-    Does a metric exist?
+      Does a metric exist?
 
     Keyword arguments:
     metric -- the name of the metric to process
@@ -193,6 +193,14 @@ class HBaseDB(object):
     return res
 
   def get_metric(self, metric):
+    """
+      Retrieve a row from HBase with the specific metric name
+
+    Use caching (memcache) if available to reduce cluster load
+    If the row exists and caching is enabled, we should make
+    sure to cache the row so future requests don't have to reach
+    out to the cluster.
+    """
     res = None
     if self.memcache_conn:
       try:
@@ -244,6 +252,14 @@ class HBaseDB(object):
       return False, e
 
   def _memcache_connect(self):
+    """
+      Make a connection to memcache (if the functions are available)
+
+    Just return if pylibmc didn't load.
+    Otherwise, reconnect to the memcache cluster.
+    We need this function to handle dead peers in a cluster and
+    general problems with lost connections.
+    """
     if not pylibmc:
       return
     try:
@@ -311,7 +327,19 @@ class HBaseDB(object):
     else:
       self.__reset_conn()
 
-
+"""
+########
+This part of our code base is pretty ugly.
+It is necessary because trying to import:
+*) Schema
+*) DefaultSchema
+*) PatternSchema
+*) Archive
+*) load_storage_schemas
+from carbon.storage causes circular import problems
+because they all import carbon.conf, which has already
+been imported.
+"""
 class Schema(object):
   def matches(self, metric):
     return bool(self.test(metric))
@@ -367,11 +395,10 @@ defaultSchema = DefaultSchema('default', [defaultArchive])
 
 def load_schemas(schema_path):
   """
-  Load storage schemas
+    Load storage schemas
 
   Keyword arguments:
   schema_path -- the filesystem path to the storage-schems.conf file
-  agg_path -- the filesystem path to the storage-aggregation.conf file
   """
   if not os.access(schema_path, os.R_OK):
     raise CarbonConfigException("Error: Missing config file or wrong perms on %s" % schema_path)
@@ -415,6 +442,11 @@ def load_schemas(schema_path):
 
   return tables, schemaList
 
+"""
+########
+End crummy code section
+"""
+
 
 def create_tables(data_tables, compress=None, host='localhost',
                   port=9090, transport='buffered', protocol='binary',
@@ -423,7 +455,8 @@ def create_tables(data_tables, compress=None, host='localhost',
   Build all the HBase tables we'll need
 
   Keyword arguments:
-  schemas -- storage-schemas.conf path
+  data_tables -- List of tables to create
+  compress -- what compression to use for the HBase tables
   host -- a host running thrift
   port -- the port the thrift instance is open on
   transport -- The type of thrift transport (buffered, framed, etc.) to use

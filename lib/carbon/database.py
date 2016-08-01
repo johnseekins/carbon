@@ -165,11 +165,11 @@ else:
       This means we have to write fairly frequently (send_freq) so
       more fine-grained data (<1 minute, etc) still shows rapidly.
       The trade-off is that we're doing more smaller writes this way.
-      Archive tuples be like (<step>, <number of points>), so we'll
-      want item 0 from each tuple.
       """
       send_freq = 60
       for s in self.storage_schemas:
+        # Archive tuples be like (<step>, <number of points>)
+        # so we'll want item 0 from each tuple.
         cur_min = min([t.getTuple()[0] for t in s.archives])
         if cur_min < send_freq:
           send_freq = cur_min

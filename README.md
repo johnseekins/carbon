@@ -17,7 +17,7 @@ Carbon is responsible for receiving metrics over the network, caching them in me
 
 ## Performance
 
-This carbon instance also utilizes memcache (http://www.memcached.org/) to store existing meta information about metrics to reduce read requests (gets) to HBase. This requires a working memcache instance and the following config in carbon.conf:
+This carbon instance also utilizes memcache (http://www.memcached.org/) to store existing meta information about metrics to reduce read requests (gets) to HBase. This requires a working memcache instance, the python package pylibmc (available on PyPI), and the following config in carbon.conf:
 ```
 # Memcache settings (for reducing reads in the cluster)
 #

@@ -51,8 +51,9 @@ else:
   setup_kwargs = dict()
 
 
-storage_dirs = [ ('storage/whisper',[]), ('storage/lists',[]),
-                 ('storage/log',[]), ('storage/rrd',[]) ]
+storage_dirs = [ ('storage/ceres', []), ('storage/whisper',[]),
+                 ('storage/lists',[]), ('storage/log',[]),
+                 ('storage/rrd',[]) ]
 conf_files = [ ('conf', glob('conf/*.example')) ]
 
 install_files = storage_dirs + conf_files
@@ -67,8 +68,8 @@ install_files += init_scripts
 try:
     setup(
       name='carbon',
-      version='0.9.10',
-      url='https://launchpad.net/graphite',
+      version='0.10.0-rc1',
+      url='http://graphiteapp.org/',
       author='Chris Davis',
       author_email='chrismd@gmail.com',
       license='Apache Software License 2.0',

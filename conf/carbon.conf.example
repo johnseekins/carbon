@@ -30,8 +30,15 @@
 #
 #LOCAL_DATA_DIR = /opt/graphite/storage/whisper/
 
-# Specify the database library used to store metric data on disk. Currently
-# only the whisper database is supported, but ceres support is coming soon.
+# Specify the database library used to store metric data on disk. Each database
+# may have configurable options to change the behaviour of how it writes to
+# persistent storage.
+#
+# whisper - Fixed-size database, similar in design and purpose to RRD. This is
+# the default storage backend for carbon and the most rigorously tested.
+#
+# ceres - Experimental alternative database that supports storing data in sparse
+# files of arbitrary fixed-size resolutions.
 DATABASE = whisper
 
 # Enable daily log rotation. If disabled, a new file will be opened whenever the log file path no
@@ -160,18 +167,17 @@ WHISPER_AUTOFLUSH = False
 # depending on the underlying storage configuration.
 # WHISPER_SPARSE_CREATE = False
 
-# By default new Whisper files are created pre-allocated with the data region
-# filled with zeros to prevent fragmentation and speed up contiguous reads and
-# writes (which are common). Enabling this option will cause Whisper to create
-# fallocate the file instead.  Only beneficial on a filesystem that
-# supports fallocate.  It maintains the benefits of contiguous reads/writes.
-# but with a much faster creation speed. Enabling this option may
-# allow a large increase of MAX_CREATES_PER_MINUTE.
-# WHISPER_FALLOCATE_CREATE = False
-#
+# Only beneficial on linux filesystems that support the fallocate system call.
+# It maintains the benefits of contiguous reads/writes, but with a potentially
+# much faster creation speed, by allowing the kernel to handle the block
+# allocation and zero-ing. Enabling this option may allow a large increase of
+# MAX_CREATES_PER_MINUTE. If enabled on an OS or filesystem that is unsupported
+# this option will gracefully fallback to standard POSIX file access methods.
+WHISPER_FALLOCATE_CREATE = True
+
 # Enabling this option will cause Whisper to lock each Whisper file it writes
 # to with an exclusive lock (LOCK_EX, see: man 2 flock). This is useful when
-# multiple carbon-cache daemons are writing to the same files
+# multiple carbon-cache daemons are writing to the same files.
 # WHISPER_LOCK_WRITES = False
 
 # On systems which has a large number of metrics, an amount of Whisper write(2)'s
@@ -179,6 +185,49 @@ WHISPER_AUTOFLUSH = False
 # disk reads occur. Enabling this option makes it possible to decrease useless
 # page cache memory by posix_fadvise(2) with POSIX_FADVISE_RANDOM option.
 # WHISPER_FADVISE_RANDOM = False
+
+# By default all nodes stored in Ceres are cached in memory to improve the
+# throughput of reads and writes to underlying slices. Turning this off will
+# greatly reduce memory consumption for databases with millions of metrics, at
+# the cost of a steep increase in disk i/o, approximately an extra two os.stat
+# calls for every read and write. Reasons to do this are if the underlying
+# storage can handle stat() with practically zero cost (SSD, NVMe, zRAM).
+# Valid values are:
+#       all - all nodes are cached
+#      none - node caching is disabled
+# CERES_NODE_CACHING_BEHAVIOR = all
+
+# Ceres nodes can have many slices and caching the right ones can improve
+# performance dramatically. Note that there are many trade-offs to tinkering
+# with this, and unless you are a ceres developer you *really* should not
+# mess with this. Valid values are:
+#    latest - only the most recent slice is cached
+#       all - all slices are cached
+#      none - slice caching is disabled
+# CERES_SLICE_CACHING_BEHAVIOR = latest
+
+# If a Ceres node accumulates too many slices, performance can suffer.
+# This can be caused by intermittently reported data. To mitigate
+# slice fragmentation there is a tolerance for how much space can be
+# wasted within a slice file to avoid creating a new one. That tolerance
+# level is determined by MAX_SLICE_GAP, which is the number of consecutive
+# null datapoints allowed in a slice file.
+# If you set this very low, you will waste less of the *tiny* bit disk space
+# that this feature wastes, and you will be prone to performance problems
+# caused by slice fragmentation, which can be pretty severe.
+# If you set this really high, you will waste a bit more disk space (each
+# null datapoint wastes 8 bytes, but keep in mind your filesystem's block
+# size). If you suffer slice fragmentation issues, you should increase this or
+# run the ceres-maintenance defrag plugin more often. However you should not
+# set it to be huge because then if a large but allowed gap occurs it has to
+# get filled in, which means instead of a simple 8-byte write to a new file we
+# could end up doing an (8 * MAX_SLICE_GAP)-byte write to the latest slice.
+# CERES_MAX_SLICE_GAP = 80
+
+# Enabling this option will cause Ceres to lock each Ceres file it writes to
+# to with an exclusive lock (LOCK_EX, see: man 2 flock). This is useful when
+# multiple carbon-cache daemons are writing to the same files.
+# CERES_LOCK_WRITES = False
 
 # Set this to True to enable whitelisting and blacklisting of metrics in
 # CONF_DIR/whitelist.conf and CONF_DIR/blacklist.conf. If the whitelist is
@@ -292,6 +341,10 @@ PICKLE_RECEIVER_PORT = 2014
 # instance.
 # Enable this for carbon-relays that send to a group of carbon-aggregators
 #RELAY_METHOD = aggregated-consistent-hashing
+#
+# You can also use fast-hashing and fast-aggregated-hashing which are in O(1)
+# and will always redirect the metrics to the same destination but do not try
+# to minimize rebalancing when the list of destinations is changing.
 RELAY_METHOD = rules
 
 # If you use consistent-hashing you can add redundancy by replicating every

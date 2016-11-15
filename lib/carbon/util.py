@@ -4,7 +4,7 @@ import pwd
 import imp
 import __builtin__
 
-from os.path import abspath, basename, dirname, join, splitext
+from os.path import abspath, basename, dirname
 try:
   from cStringIO import StringIO
 except ImportError:
@@ -110,10 +110,56 @@ def parseDestinations(destination_strings):
     else:
       raise ValueError("Invalid destination string \"%s\"" % dest_string)
 
-    destinations.append( (server, int(port), instance) )
+    destinations.append((server, int(port), instance))
 
   return destinations
 
+
+# Yes this is duplicated in whisper. Yes, duplication is bad.
+# But the code is needed in both places and we do not want to create
+# a dependency on whisper especiaily as carbon moves toward being a more
+# generic storage service that can use various backends.
+UnitMultipliers = {
+  's' : 1,
+  'm' : 60,
+  'h' : 60 * 60,
+  'd' : 60 * 60 * 24,
+  'w' : 60 * 60 * 24 * 7,
+  'y' : 60 * 60 * 24 * 365,
+}
+
+
+def getUnitString(s):
+  if s not in UnitMultipliers:
+    raise ValueError("Invalid unit '%s'" % s)
+  return s
+
+
+def parseRetentionDef(retentionDef):
+  import re
+  (precision, points) = retentionDef.strip().split(':')
+
+  if precision.isdigit():
+    precision = int(precision) * UnitMultipliers[getUnitString('s')]
+  else:
+    precision_re = re.compile(r'^(\d+)([a-z]+)$')
+    match = precision_re.match(precision)
+    if match:
+      precision = int(match.group(1)) * UnitMultipliers[getUnitString(match.group(2))]
+    else:
+      raise ValueError("Invalid precision specification '%s'" % precision)
+
+  if points.isdigit():
+    points = int(points)
+  else:
+    points_re = re.compile(r'^(\d+)([a-z]+)$')
+    match = points_re.match(points)
+    if match:
+      points = int(match.group(1)) * UnitMultipliers[getUnitString(match.group(2))] / precision
+    else:
+      raise ValueError("Invalid retention specification '%s'" % points)
+
+  return (precision, points)
 
 
 # This whole song & dance is due to pickle being insecure
@@ -124,8 +170,8 @@ def parseDestinations(destination_strings):
 if USING_CPICKLE:
   class SafeUnpickler(object):
     PICKLE_SAFE = {
-      'copy_reg' : set(['_reconstructor']),
-      '__builtin__' : set(['object']),
+      'copy_reg': set(['_reconstructor']),
+      '__builtin__': set(['object']),
     }
 
     @classmethod
@@ -147,9 +193,10 @@ if USING_CPICKLE:
 else:
   class SafeUnpickler(pickle.Unpickler):
     PICKLE_SAFE = {
-      'copy_reg' : set(['_reconstructor']),
-      '__builtin__' : set(['object']),
+      'copy_reg': set(['_reconstructor']),
+      '__builtin__': set(['object']),
     }
+
     def find_class(self, module, name):
       if not module in self.PICKLE_SAFE:
         raise pickle.UnpicklingError('Attempting to unpickle unsafe module %s' % module)
@@ -229,14 +276,3 @@ class PluginRegistrar(type):
     super(PluginRegistrar, classObj).__init__(name, bases, members)
     if hasattr(classObj, 'plugin_name'):
       classObj.plugins[classObj.plugin_name] = classObj
-
-
-def load_module(module_path, member=None):
-  module_name = splitext(basename(module_path))[0]
-  module_file = open(module_path, 'U')
-  description = ('.py', 'U', imp.PY_SOURCE)
-  module = imp.load_module(module_name, module_file, module_path, description)
-  if member:
-    return getattr(module, member)
-  else:
-    return module

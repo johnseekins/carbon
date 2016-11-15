@@ -16,8 +16,7 @@ import time
 
 from carbon import state
 from carbon.cache import MetricCache
-from carbon.storage import getFilesystemPath, loadStorageSchemas,\
-    loadAggregationSchemas
+from carbon.storage import loadStorageSchemas, loadAggregationSchemas
 from carbon.conf import settings
 from carbon import log, events, instrumentation
 from carbon.util import TokenBucket
@@ -56,7 +55,6 @@ def optimalWriteOrder():
   rate limit on new metrics"""
   while MetricCache:
     (metric, datapoints) = MetricCache.drain_metric()
-    dbFilePath = getFilesystemPath(metric)
     dbFileExists = state.database.exists(metric)
 
     if not dbFileExists and CREATE_BUCKET:
@@ -68,10 +66,10 @@ def optimalWriteOrder():
       # when rate limitng unless our cache is too big or some other legit
       # reason.
       if CREATE_BUCKET.drain(1):
-        yield (metric, datapoints, dbFilePath, dbFileExists)
+        yield (metric, datapoints, dbFileExists)
       continue
 
-    yield (metric, datapoints, dbFilePath, dbFileExists)
+    yield (metric, datapoints, dbFileExists)
 
 
 def writeCachedDataPoints():
@@ -80,7 +78,7 @@ def writeCachedDataPoints():
   while MetricCache:
     dataWritten = False
 
-    for (metric, datapoints, dbFilePath, dbFileExists) in optimalWriteOrder():
+    for (metric, datapoints, dbFileExists) in optimalWriteOrder():
       dataWritten = True
 
       if not dbFileExists:
@@ -102,24 +100,27 @@ def writeCachedDataPoints():
         if not archiveConfig:
           raise Exception("No storage schema matched the metric '%s', check your storage-schemas.conf file." % metric)
 
-        log.creates("creating database file %s (archive=%s xff=%s agg=%s)" %
-                    (dbFilePath, archiveConfig, xFilesFactor, aggregationMethod))
+        log.creates("creating database metric %s (archive=%s xff=%s agg=%s)" %
+                    (metric, archiveConfig, xFilesFactor, aggregationMethod))
         try:
             state.database.create(metric, archiveConfig, xFilesFactor, aggregationMethod)
             instrumentation.increment('creates')
         except Exception:
-            log.err("Error creating %s" % (dbFilePath))
+            log.msg("Error creating %s: %s" % (metric, e))
             continue
       # If we've got a rate limit configured lets makes sure we enforce it
       if UPDATE_BUCKET:
         UPDATE_BUCKET.drain(1, blocking=True)
       try:
         t1 = time.time()
+        # If we have duplicated points, always pick the last. update_many()
+        # has no guaranted behavior for that, and in fact the current implementation
+        # will keep the first point in the list.
+        datapoints = dict(datapoints).items()
         state.database.write(metric, datapoints)
         updateTime = time.time() - t1
-      except Exception:
-        log.msg("Error writing to %s" % (dbFilePath))
-        log.err()
+      except Exception, e:
+        log.msg("Error writing to %s: %s" % (metric, e))
         instrumentation.increment('errors')
       else:
         pointCount = len(datapoints)
@@ -146,18 +147,16 @@ def reloadStorageSchemas():
   global SCHEMAS
   try:
     SCHEMAS = loadStorageSchemas()
-  except Exception:
-    log.msg("Failed to reload storage SCHEMAS")
-    log.err()
+  except Exception, e:
+    log.msg("Failed to reload storage SCHEMAS: %s" % (e))
 
 
 def reloadAggregationSchemas():
   global AGGREGATION_SCHEMAS
   try:
     AGGREGATION_SCHEMAS = loadAggregationSchemas()
-  except Exception:
-    log.msg("Failed to reload aggregation SCHEMAS")
-    log.err()
+  except Exception, e:
+    log.msg("Failed to reload aggregation SCHEMAS: %s" % (e))
 
 
 def shutdownModifyUpdateSpeed():

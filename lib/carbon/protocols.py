@@ -1,7 +1,7 @@
 import time
 
-from twisted.internet import reactor
-from twisted.internet.protocol import DatagramProtocol
+from twisted.internet.protocol import ServerFactory, DatagramProtocol
+from twisted.application.internet import TCPServer, UDPServer
 from twisted.internet.error import ConnectionDone
 from twisted.protocols.basic import LineOnlyReceiver, Int32StringReceiver
 from twisted.protocols.policies import TimeoutMixin
@@ -9,17 +9,55 @@ from carbon import log, events, state, management
 from carbon.conf import settings
 from carbon.regexlist import WhiteList, BlackList
 from carbon.util import pickle, get_unpickler
+from carbon.util import PluginRegistrar
 
 
-class MetricReceiver(TimeoutMixin):
+class CarbonReceiverFactory(ServerFactory):
+  def buildProtocol(self, addr):
+    from carbon.conf import settings
+
+    # Don't establish the connection if we have reached the limit.
+    if len(state.connectedMetricReceiverProtocols) < settings.MAX_RECEIVER_CONNECTIONS:
+      return ServerFactory.buildProtocol(self, addr)
+    else:
+      return None
+
+
+class CarbonServerProtocol(object):
+  __metaclass__ = PluginRegistrar
+  plugins = {}
+
+  @classmethod
+  def build(cls, root_service):
+    plugin_up = cls.plugin_name.upper()
+    interface = settings.get('%s_RECEIVER_INTERFACE' % plugin_up, None)
+    port = int(settings.get('%s_RECEIVER_PORT' % plugin_up, 0))
+    protocol = cls
+
+    if not port:
+      return
+
+    if hasattr(protocol, 'datagramReceived'):
+      service = UDPServer(port, protocol(), interface=interface)
+      service.setServiceParent(root_service)
+    else:
+      factory = CarbonReceiverFactory()
+      factory.protocol = protocol
+      service = TCPServer(port, factory, interface=interface)
+      service.setServiceParent(root_service)
+
+
+class MetricReceiver(CarbonServerProtocol, TimeoutMixin):
   """ Base class for all metric receiving protocols, handles flow
   control events and connection state logging.
   """
+
   def connectionMade(self):
     self.setTimeout(settings.METRIC_CLIENT_IDLE_TIMEOUT)
     self.peerName = self.getPeerName()
     if settings.LOG_LISTENER_CONN_SUCCESS:
-      log.listener("%s connection with %s established" % (self.__class__.__name__, self.peerName))
+      log.listener("%s connection with %s established" % (
+        self.__class__.__name__, self.peerName))
 
     if state.metricReceiversPaused:
       self.pauseReceiving()
@@ -62,16 +100,17 @@ class MetricReceiver(TimeoutMixin):
     if WhiteList and metric not in WhiteList:
       instrumentation.increment('whitelistRejects')
       return
-    if datapoint[1] != datapoint[1]: # filter out NaN values
+    if datapoint[1] != datapoint[1]:  # filter out NaN values
       return
-    if int(datapoint[0]) == -1: # use current time if none given: https://github.com/graphite-project/carbon/issues/54
+    if int(datapoint[0]) == -1:  # use current time if none given: https://github.com/graphite-project/carbon/issues/54
       datapoint = (time.time(), datapoint[1])
-    
+
     events.metricReceived(metric, datapoint)
     self.resetTimeout()
 
 
 class MetricLineReceiver(MetricReceiver, LineOnlyReceiver):
+  plugin_name = "line"
   delimiter = '\n'
 
   def lineReceived(self, line):
@@ -88,11 +127,20 @@ class MetricLineReceiver(MetricReceiver, LineOnlyReceiver):
 
 
 class MetricDatagramReceiver(MetricReceiver, DatagramProtocol):
+  plugin_name = "udp"
+
+  @classmethod
+  def build(cls, root_service):
+    if not settings.ENABLE_UDP_LISTENER:
+      return
+
+    super(MetricDatagramReceiver, cls).build(root_service)
+
   def datagramReceived(self, data, (host, port)):
     for line in data.splitlines():
       try:
         metric, value, timestamp = line.strip().split()
-        datapoint = ( float(timestamp), float(value) )
+        datapoint = (float(timestamp), float(value))
 
         self.metricReceived(metric, datapoint)
       except ValueError:
@@ -102,6 +150,7 @@ class MetricDatagramReceiver(MetricReceiver, DatagramProtocol):
 
 
 class MetricPickleReceiver(MetricReceiver, Int32StringReceiver):
+  plugin_name = "pickle"
   MAX_LENGTH = 2 ** 20
 
   def connectionMade(self):
@@ -115,9 +164,14 @@ class MetricPickleReceiver(MetricReceiver, Int32StringReceiver):
       log.listener('invalid pickle received from %s, ignoring' % self.peerName)
       return
 
-    for (metric, datapoint) in datapoints:
+    for raw in datapoints:
       try:
-        datapoint = ( float(datapoint[0]), float(datapoint[1]) ) #force proper types
+        (metric, (value, timestamp)) = raw
+      except Exception, e:
+        log.listener('Error decoding pickle: %s' % e)
+
+      try:
+        datapoint = (float(value), float(timestamp))  # force proper types
       except ValueError:
         continue
 

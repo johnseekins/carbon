@@ -78,6 +78,7 @@ class HBaseDB(object):
     self.send_freq = settingsdict['send_freq']
     self.schemas = settingsdict['m_schema']
     self.memcache_hosts = settingsdict['memcache']
+    self.memcache_conn = None
 
     # variables that get defined elsewhere
     self.data_tables = {}
